@@ -10,10 +10,9 @@ struct Input { const char *name; Vec vec; };
 
 // http://golf.shinh.org/p.rb?reversed+even+or+odd+first
 static const Input inputs[] = {
-    {"n", {100, 100, 100, 100, 53, 53, 53, 53}},
-    {"x", {100, 98, 2, 99, 53, 1, 20, 4}},
-};
-static const Vec goal = {98, 96, 99, 97, 51, 52, 18, 2};
+                  {"n", {100, 100, 100, 100,     53,  53,  53,  53}},
+                  {"x", {100,  98,   2,  99,     53,   1,  20,   4}}, };
+static const Vec goal = { 98,  96,  99,  97,     51,  52,  18,   2};
 
 const int max_length = 11;
 
