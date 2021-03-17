@@ -119,7 +119,7 @@ void find_expressions(int n) {
               cn[6][oL | oR] = Expr{&eL, &eR, "|", 0};
             }
             if (precL >= 7 && precR > 7) {
-              cn[7][oL & oR] = Expr{&eL, &eR, "^", 0};
+              cn[7][oL ^ oR] = Expr{&eL, &eR, "^", 0};
             }
             if (precL >= 8 && precR > 8) {
               cn[8][oL & oR] = Expr{&eL, &eR, "&", 0};
