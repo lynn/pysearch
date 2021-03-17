@@ -88,6 +88,12 @@ bool ok_after_keyword(const Expr *e) {
   }
 }
 
+int positive_integer_length(int k) {
+  int l = 1;
+  while (k >= 10) k /= 10, l++;
+  return l;
+}
+
 void find_expressions(int n) {
   auto &cn = cache[n];
   if (n == 1) {
@@ -96,7 +102,7 @@ void find_expressions(int n) {
     }
   }
   for (const auto l : literals) {
-    if ((0 <= l && l < 10 && n == 1) || (10 <= l && l < 100 && n == 2))
+    if (positive_integer_length(l) == n)
       cn[p_literal][0 * goal + l] = Expr{nullptr, nullptr, nullptr, l};
   }
 
