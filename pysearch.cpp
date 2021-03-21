@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdio>
 #include <unordered_map>
 #include <valarray>
@@ -9,10 +10,14 @@ struct Input { const char *name; Vec vec; };
 // ---- start of parameters ---
 
 // http://golf.shinh.org/p.rb?reversed+even+or+odd+first
-static const Input inputs[] = {
-                  {"n", {100, 100, 100, 100,     53,  53,  53,  53}},
-                  {"x", {100,  98,   2,  99,     53,   1,  20,   4}}, };
-static const Vec goal = { 98,  96,  99,  97,     51,  52,  18,   2};
+// static const Input inputs[] = {
+//                   {"n", {100, 100, 100, 100,     53,  53,  53,  53}},
+//                   {"x", {100,  98,   2,  99,     53,   1,  20,   4}}, };
+// static const Vec goal = { 98,  96,  99,  97,     51,  52,  18,   2};
+
+static const Input inputs[] = { {"n", {3,5,6,28, 31, 33, 34, 35, 36, 37, 38}} };
+
+static const Vec goal = {5,6,7,31, 33, 34, 35, 36, 37, 38,40};
 
 const int max_length = 14;
 
@@ -52,8 +57,11 @@ struct Expr {
   const Expr *right;
   Operator op;
   int32_t literal;
-  int32_t prec() const { return static_cast<int32_t>(op) >> 8; }
+  inline int32_t prec() const { return static_cast<int32_t>(op) >> 8; }
+  int length;
 };
+
+using Pair = std::array<Expr, 2>;
 
 void print_operator(Operator op) {
   switch (op) {
@@ -118,9 +126,9 @@ struct VecEqual {
   }
 };
 
-// cache[length][output] = highest-prec expression of that length yielding that output
-using CacheLevel = std::unordered_map<Vec, Expr, VecHasher, VecEqual>;
-using Cache = std::unordered_map<int, CacheLevel>;
+// cache[output] = best expressions yielding it
+using Cache = std::unordered_map<Vec, Pair, VecHasher, VecEqual>;
+
 static Cache cache = Cache();
 
 // "3or" and ")or" are valid, but "nor" isn't.
@@ -147,116 +155,94 @@ int positive_integer_length(int k) {
   return l;
 }
 
-void cache_if_better(CacheLevel& level, const Vec& output, const Expr& expr) {
-  // if it doesn't exist, "old" is a default-constructed Expr with prec == 0 so it all works out.
-  auto old = level[output];
-  if (expr.prec() > old.prec()) {
-    level[output] = expr;
+inline void cache_if_better(Cache& level, const Vec& output, const Expr& expr) {
+  // if it doesn't exist, "old" is a default-constructed Expr with prec == 0, length == 0.
+  auto& old = level[output];
+  if (expr.prec() > old[1].prec() && (old[1].length == 0 || expr.length <= old[1].length)) {
+    old[1] = expr;
+  }
+  if ((old[0].length == 0 || expr.length < old[0].length) && expr.prec() >= old[0].prec()) {
+    old[0] = expr;
   }
 }
 
-void find_expressions(int n) {
-  auto &cn = cache[n];
-  if (n == 1) {
-    for (int i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
-      cn[inputs[i].vec] = Expr{nullptr, nullptr, Operator::Literal, ~i};
-    }
+void find_expressions() {
+  for (int i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
+    const auto e = Expr{nullptr, nullptr, Operator::Literal, ~i, 1};
+    cache[inputs[i].vec] = {e, e};
   }
   for (const auto l : literals) {
-    if (positive_integer_length(l) == n)
-      cn[0 * goal + l] = Expr{nullptr, nullptr, Operator::Literal, l};
+    const auto e = Expr{nullptr, nullptr, Operator::Literal, l, positive_integer_length(l)};
+    cache[0 * goal + l] = {e, e};
   }
 
-  for (int nR = 1; nR < n; nR++) {
-    for (const auto &[oR, eR] : cache[nR]) {
-      // 1-byte operators
-      for (const auto &[oL, eL] : cache[n - nR - 1]) {
-        if (eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL < oR), Expr{&eL, &eR, Operator::Lt, 0});
-        }
-        if (eL.prec() >= 6 && eR.prec() > 6) {
-          cache_if_better(cn, oL | oR, Expr{&eL, &eR, Operator::BitOr, 0});
-        }
-        if (eL.prec() >= 7 && eR.prec() > 7) {
-          cache_if_better(cn, oL ^ oR, Expr{&eL, &eR, Operator::BitXor, 0});
-        }
-        if (eL.prec() >= 8 && eR.prec() > 8) {
-          cache_if_better(cn, oL & oR, Expr{&eL, &eR, Operator::BitAnd, 0});
-        }
-        if (eL.prec() >= 10 && eR.prec() > 10) {
-          cache_if_better(cn, oL + oR, Expr{&eL, &eR, Operator::Add, 0});
-          cache_if_better(cn, oL - oR, Expr{&eL, &eR, Operator::Sub, 0});
-        }
-        if (eL.prec() >= 11 && eR.prec() > 11) {
-          cache_if_better(cn, oL * oR, Expr{&eL, &eR, Operator::Mul, 0});
-          if ((oR != 0).min()) {
-            auto mod = ((oL % oR) + oR) % oR;
-            cache_if_better(cn, mod, Expr{&eL, &eR, Operator::Mod, 0});
-            cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div, 0});
-          }
+  for (const auto &[oR, pR] : cache) for (const auto &eR : pR) if (eR.length < 8) {
+    // 1-byte operators
+    for (const auto &[oL, pL] : cache) for (const auto &eL : pL) if (eL.length < 8) {
+      if (eL.prec() >= 5 && eR.prec() > 5) {
+        cache_if_better(cache, +(oL < oR), Expr{&eL, &eR, Operator::Lt, 0, eL.length + eR.length + 1});
+      }
+      if (eL.prec() >= 6 && eR.prec() > 6) {
+        cache_if_better(cache, oL | oR, Expr{&eL, &eR, Operator::BitOr, 0, eL.length + eR.length + 1});
+      }
+      if (eL.prec() >= 7 && eR.prec() > 7) {
+        cache_if_better(cache, oL ^ oR, Expr{&eL, &eR, Operator::BitXor, 0, eL.length + eR.length + 1});
+      }
+      if (eL.prec() >= 8 && eR.prec() > 8) {
+        cache_if_better(cache, oL & oR, Expr{&eL, &eR, Operator::BitAnd, 0, eL.length + eR.length + 1});
+      }
+      if (eL.prec() >= 10 && eR.prec() > 10) {
+        cache_if_better(cache, oL + oR, Expr{&eL, &eR, Operator::Add, 0, eL.length + eR.length + 1});
+        cache_if_better(cache, oL - oR, Expr{&eL, &eR, Operator::Sub, 0, eL.length + eR.length + 1});
+      }
+      if (eL.prec() >= 11 && eR.prec() > 11) {
+        cache_if_better(cache, oL * oR, Expr{&eL, &eR, Operator::Mul, 0, eL.length + eR.length + 1});
+        if ((oR != 0).min()) {
+          auto mod = ((oL % oR) + oR) % oR;
+          cache_if_better(cache, mod, Expr{&eL, &eR, Operator::Mod, 0, eL.length + eR.length + 1});
+          cache_if_better(cache, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div, 0, eL.length + eR.length + 1});
         }
       }
-      // 2-byte operators
-      for (const auto &[oL, eL] : cache[n - nR - 2]) {
-        if (eL.prec() >= 3 && eR.prec() > 3) {
-          if (ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::Or, 0});
-        }
-        if (eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL <= oR), Expr{&eL, &eR, Operator::Leq, 0});
-        }
-        if (eL.prec() > 9 && eR.prec() >= 9 && (oR >= 0).min() && (oR <= 31).min()) {
-          cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0});
-          cache_if_better(cn, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0});
-        }
+      if (eL.prec() >= 3 && eR.prec() > 3) {
+        if (ok_before_keyword(&eL) && ok_after_keyword(&eR))
+          cache_if_better(cache, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::Or, 0, eL.length + eR.length + 2});
       }
-
-      // 3-byte operators
-      for (const auto &[oL, eL] : cache[n - nR - 3]) {
-        if (eL.prec() >= 3 && eR.prec() > 3) {
-          if (!ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            // TODO spaces around or
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::SpaceOr, 0});
-          if (ok_before_keyword(&eL) && !ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0});
-        }
+      if (eL.prec() >= 5 && eR.prec() > 5) {
+        cache_if_better(cache, +(oL <= oR), Expr{&eL, &eR, Operator::Leq, 0, eL.length + eR.length + 2});
+      }
+      if (eL.prec() > 9 && eR.prec() >= 9 && (oR >= 0).min() && (oR <= 31).min()) {
+        cache_if_better(cache, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0, eL.length + eR.length + 2});
+        cache_if_better(cache, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0, eL.length + eR.length + 2});
+      }
+      if (eL.prec() >= 3 && eR.prec() > 3) {
+        if (!ok_before_keyword(&eL) && ok_after_keyword(&eR))
+          cache_if_better(cache, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::SpaceOr, 0, eL.length + eR.length + 3});
+        if (ok_before_keyword(&eL) && !ok_after_keyword(&eR))
+          cache_if_better(cache, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0, eL.length + eR.length + 3});
       }
     }
-  }
-  for (const auto &[oR, eR] : cache[n - 2]) {
     if (eR.op >= Operator::Parens)
       continue;
-    cn[oR] = Expr{nullptr, &eR, Operator::Parens, 0};
-  }
-  for (const auto &[oR, eR] : cache[n - 1]) {
+    cache_if_better(cache, oR, Expr{nullptr, &eR, Operator::Parens, 0, eR.length + 2});
     if (eR.prec() >= 12) {
-      cache_if_better(cn, ~oR, Expr{nullptr, &eR, Operator::BitNeg, 0});
-      cache_if_better(cn, -oR, Expr{nullptr, &eR, Operator::Neg, 0});
+      cache_if_better(cache, ~oR, Expr{nullptr, &eR, Operator::BitNeg, 0, eR.length + 1});
+      cache_if_better(cache, -oR, Expr{nullptr, &eR, Operator::Neg, 0, eR.length + 1});
     }
   }
 }
 
 int main() {
   printf("sizeof(Expr) = %zu\n", sizeof(Expr));
-  bool no_results = true;
   for (int n = 1; n <= max_length; n++) {
-    printf("Finding length %d...\n", n);
-    find_expressions(n);
-    printf("Found %zu expressions.\n", cache[n].size());
-    bool first = true;
-    for (const auto &[oR, eR] : cache[n]) {
-      if ((oR != goal).max())
-        continue;
-      if (first) {
-        printf("\n--- Length %d ---\n", n);
-        first = false;
-        no_results = false;
-      }
-      print_expression(&eR);
-      puts("");
-    }
+    printf("Finding depth %d...\n", n);
+    find_expressions();
+    printf("Found %zu expressions.\n", cache.size());
   }
-  if (no_results) puts("\nNo results found.");
-  puts("");
+  for (const auto &[output, pair] : cache) {
+    if ((output != goal).max())
+      continue;
+    print_expression(&pair[0]);
+  }
+  printf("That's all.\n");
   return 0;
 }
