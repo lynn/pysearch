@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <numeric>
 #include <unordered_map>
 #include <valarray>
 #include <vector>
@@ -8,17 +9,56 @@ struct Input { const char *name; Vec vec; };
 
 // ---- start of parameters ---
 
-// http://golf.shinh.org/p.rb?reversed+even+or+odd+first
 static const Input inputs[] = {
-                  {"n", {100, 100, 100, 100,     53,  53,  53,  53}},
-                  {"x", {100,  98,   2,  99,     53,   1,  20,   4}}, };
-static const Vec goal = { 98,  96,  99,  97,     51,  52,  18,   2};
+  {"n", { 'M', 'D', 'C', 'L', 'X', 'V', 'I' } },
+};
+static const Vec goal =
+  { 3, 2, 2, 1, 1, 0, 0 };
 
-const int max_length = 14;
+const int max_length = 15;
 
-static const int literals[] = {2,3}; // 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,};
+static const int literals[] = {2,3,4,5,6,7,8,9};
+
+const bool Use_Or = true;
+const bool Use_Lt = true;
+const bool Use_Leq = true;
+const bool Use_BitOr = true;
+const bool Use_BitXor = true;
+const bool Use_BitAnd = true;
+const bool Use_BitShl = true;
+const bool Use_BitShr = true;
+const bool Use_Add = true;
+const bool Use_Sub = true;
+const bool Use_Mul = true;
+const bool Use_Mod = true;
+const bool Use_Div = true;
+const bool Use_Gcd = false;
+const bool Use_Neg = true;
+const bool Use_BitNeg = true;
+const bool Use_Exp = true;
+
+const bool CStyleMod = false;
+const bool ReuseVars = true;
 
 // ---- end of parameters ---
+
+int ipow(int b, int e) {
+  int r = 1;
+  while (e) { if (e&1) r*=b; e>>=1; b*=b; }
+  return r;
+}
+
+Vec ipow(Vec b, Vec e) {
+  Vec r = b;
+  for (auto i=0; i<b.size(); i++) r[i] = ipow(b[i], e[i]);
+  return r;
+}
+
+Vec gcd(Vec a, Vec b) {
+  Vec r = b;
+  for (auto i=0; i<b.size(); i++) r[i] = std::gcd(a[i], b[i]);
+  return r;
+}
 
 enum class Operator : int32_t {
   Or = 0x300,
@@ -41,8 +81,10 @@ enum class Operator : int32_t {
   Mul = 0xB00,
   Mod = 0xB01,
   Div = 0xB02,
+  Gcd = 0xB03, // doesn't exist in python
   Neg = 0xC00,
   BitNeg = 0xC01,
+  Exp = 0xD00,
   Parens = 0xFE00,
   Literal = 0xFF00,
 };
@@ -52,6 +94,7 @@ struct Expr {
   const Expr *right;
   Operator op;
   int32_t literal;
+  int32_t var_mask;
   int32_t prec() const { return static_cast<int32_t>(op) >> 8; }
 };
 
@@ -77,8 +120,10 @@ void print_operator(Operator op) {
     case Operator::Mul: printf("*"); break;
     case Operator::Mod: putchar('%'); break;
     case Operator::Div: printf("/"); break;
+    case Operator::Gcd: printf("∨"); break;
     case Operator::Neg: printf("-"); break;
     case Operator::BitNeg: printf("~"); break;
+    case Operator::Exp: printf("**"); break;
     case Operator::Parens: printf("("); break;
     default: break;
   }
@@ -159,7 +204,7 @@ void find_expressions(int n) {
   auto &cn = cache[n];
   if (n == 1) {
     for (int i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
-      cn[inputs[i].vec] = Expr{nullptr, nullptr, Operator::Literal, ~i};
+      cn[inputs[i].vec] = Expr{nullptr, nullptr, Operator::Literal, ~i, 1 << i};
     }
   }
   for (const auto l : literals) {
@@ -171,54 +216,68 @@ void find_expressions(int n) {
     for (const auto &[oR, eR] : cache[nR]) {
       // 1-byte operators
       for (const auto &[oL, eL] : cache[n - nR - 1]) {
-        if (eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL < oR), Expr{&eL, &eR, Operator::Lt, 0});
+        if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
+        const auto mask = eL.var_mask | eR.var_mask;
+        if (Use_Lt && eL.prec() >= 5 && eR.prec() > 5) {
+          cache_if_better(cn, +(oL < oR), Expr{&eL, &eR, Operator::Lt, 0, mask});
         }
-        if (eL.prec() >= 6 && eR.prec() > 6) {
-          cache_if_better(cn, oL | oR, Expr{&eL, &eR, Operator::BitOr, 0});
+        if (Use_BitOr && eL.prec() >= 6 && eR.prec() > 6) {
+          cache_if_better(cn, oL | oR, Expr{&eL, &eR, Operator::BitOr, 0, mask});
         }
-        if (eL.prec() >= 7 && eR.prec() > 7) {
-          cache_if_better(cn, oL ^ oR, Expr{&eL, &eR, Operator::BitXor, 0});
+        if (Use_BitXor && eL.prec() >= 7 && eR.prec() > 7) {
+          cache_if_better(cn, oL ^ oR, Expr{&eL, &eR, Operator::BitXor, 0, mask});
         }
-        if (eL.prec() >= 8 && eR.prec() > 8) {
-          cache_if_better(cn, oL & oR, Expr{&eL, &eR, Operator::BitAnd, 0});
+        if (Use_BitAnd && eL.prec() >= 8 && eR.prec() > 8) {
+          cache_if_better(cn, oL & oR, Expr{&eL, &eR, Operator::BitAnd, 0, mask});
         }
         if (eL.prec() >= 10 && eR.prec() > 10) {
-          cache_if_better(cn, oL + oR, Expr{&eL, &eR, Operator::Add, 0});
-          cache_if_better(cn, oL - oR, Expr{&eL, &eR, Operator::Sub, 0});
+          if (Use_Add) cache_if_better(cn, oL + oR, Expr{&eL, &eR, Operator::Add, 0, mask});
+          if (Use_Sub) cache_if_better(cn, oL - oR, Expr{&eL, &eR, Operator::Sub, 0, mask});
         }
         if (eL.prec() >= 11 && eR.prec() > 11) {
-          cache_if_better(cn, oL * oR, Expr{&eL, &eR, Operator::Mul, 0});
+          if (Use_Mul) cache_if_better(cn, oL * oR, Expr{&eL, &eR, Operator::Mul, 0, mask});
           if ((oR != 0).min()) {
-            auto mod = ((oL % oR) + oR) % oR;
-            cache_if_better(cn, mod, Expr{&eL, &eR, Operator::Mod, 0});
-            cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div, 0});
+            if (CStyleMod) {
+              if (Use_Mod) cache_if_better(cn, oL % oR, Expr{&eL, &eR, Operator::Mod, 0, mask});
+              if (Use_Div) cache_if_better(cn, oL / oR, Expr{&eL, &eR, Operator::Div, 0, mask});
+            } else {
+              auto mod = ((oL % oR) + oR) % oR;
+              if (Use_Mod) cache_if_better(cn, mod, Expr{&eL, &eR, Operator::Mod, 0, mask});
+              if (Use_Div) cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div, 0, mask});
+            }
           }
+          if (Use_Gcd) cache_if_better(cn, gcd(oL, oR), Expr{&eL, &eR, Operator::Gcd, 0, mask});
         }
       }
       // 2-byte operators
       for (const auto &[oL, eL] : cache[n - nR - 2]) {
+        if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
+        const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
-          if (ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::Or, 0});
+          if (Use_Or && ok_before_keyword(&eL) && ok_after_keyword(&eR))
+            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::Or, 0, mask});
         }
-        if (eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL <= oR), Expr{&eL, &eR, Operator::Leq, 0});
+        if (Use_Leq && eL.prec() >= 5 && eR.prec() > 5) {
+          cache_if_better(cn, +(oL <= oR), Expr{&eL, &eR, Operator::Leq, 0, mask});
         }
         if (eL.prec() > 9 && eR.prec() >= 9 && (oR >= 0).min() && (oR <= 31).min()) {
-          cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0});
-          cache_if_better(cn, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0});
+          if (Use_BitShl) cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0, mask});
+          if (Use_BitShr) cache_if_better(cn, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0, mask});
+        }
+        if (eL.prec() > 13 && eR.prec() >= 13 && (oR >= 0).min() && (oR <= 10).min()) {
+          if (Use_Exp) cache_if_better(cn, ipow(oL, oR), Expr{&eL, &eR, Operator::Exp, 0, mask});
         }
       }
 
       // 3-byte operators
       for (const auto &[oL, eL] : cache[n - nR - 3]) {
+        if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
+        const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
-          if (!ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            // TODO spaces around or
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::SpaceOr, 0});
-          if (ok_before_keyword(&eL) && !ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0});
+          if (Use_Or && !ok_before_keyword(&eL) && ok_after_keyword(&eR))
+            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::SpaceOr, 0, mask});
+          if (Use_Or && ok_before_keyword(&eL) && !ok_after_keyword(&eR))
+            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0, mask});
         }
       }
     }
@@ -226,12 +285,12 @@ void find_expressions(int n) {
   for (const auto &[oR, eR] : cache[n - 2]) {
     if (eR.op >= Operator::Parens)
       continue;
-    cn[oR] = Expr{nullptr, &eR, Operator::Parens, 0};
+    cn[oR] = Expr{nullptr, &eR, Operator::Parens, 0, eR.var_mask};
   }
   for (const auto &[oR, eR] : cache[n - 1]) {
     if (eR.prec() >= 12) {
-      cache_if_better(cn, ~oR, Expr{nullptr, &eR, Operator::BitNeg, 0});
-      cache_if_better(cn, -oR, Expr{nullptr, &eR, Operator::Neg, 0});
+      if (Use_BitNeg) cache_if_better(cn, ~oR, Expr{nullptr, &eR, Operator::BitNeg, 0, eR.var_mask});
+      if (Use_Neg) cache_if_better(cn, -oR, Expr{nullptr, &eR, Operator::Neg, 0, eR.var_mask});
     }
   }
 }
@@ -245,7 +304,7 @@ int main() {
     printf("Found %zu expressions.\n", cache[n].size());
     bool first = true;
     for (const auto &[oR, eR] : cache[n]) {
-      if ((oR != goal).max())
+      if (( oR != goal ).max())
         continue;
       if (first) {
         printf("\n--- Length %d ---\n", n);
