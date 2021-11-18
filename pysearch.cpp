@@ -5,18 +5,22 @@
 #include <vector>
 
 using Vec = std::valarray<int>;
+const int int_min = std::numeric_limits<int>::min();
 struct Input { const char *name; Vec vec; };
 
 // ---- start of parameters ---
 
 static const Input inputs[] = {
-  {"n", { 'M', 'D', 'C', 'L', 'X', 'V', 'I' } },
+  {"x", {32,32,32,32,9608,9608,9608,9608} },
+  {"y", {32,32,9608,9608,32,32,9608,9608} },
+  {"z", {32,9608,32,9608,32,9608,32,9608} },
 };
 static const Vec goal =
-  { 3, 2, 2, 1, 1, 0, 0 };
+  { 0, 1, 1, 1, 0, 1, 1, 0 };
 
 const int max_length = 15;
 
+// static const int literals[] = {2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
 static const int literals[] = {2,3,4,5,6,7,8,9};
 
 const bool Use_Or = true;
@@ -236,7 +240,7 @@ void find_expressions(int n) {
         }
         if (eL.prec() >= 11 && eR.prec() > 11) {
           if (Use_Mul) cache_if_better(cn, oL * oR, Expr{&eL, &eR, Operator::Mul, 0, mask});
-          if ((oR != 0).min()) {
+          if ((oR != 0 && (oL != int_min || oR != -1)).min()) {
             if (CStyleMod) {
               if (Use_Mod) cache_if_better(cn, oL % oR, Expr{&eL, &eR, Operator::Mod, 0, mask});
               if (Use_Div) cache_if_better(cn, oL / oR, Expr{&eL, &eR, Operator::Div, 0, mask});
