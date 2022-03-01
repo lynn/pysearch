@@ -207,7 +207,7 @@ void cache_if_better(CacheLevel& level, const Vec& output, const Expr& expr) {
 }
 
 void find_expressions(int n) {
-  auto &cn = cache[n];
+  auto &cn = cache[n]; Vec z;
   if (n == 1) {
     for (int i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
       cn[inputs[i].vec] = Expr{nullptr, nullptr, Operator::Literal, ~i, 1 << i};
@@ -225,7 +225,8 @@ void find_expressions(int n) {
         if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
         const auto mask = eL.var_mask | eR.var_mask;
         if (Use_Lt && eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL < oR), Expr{&eL, &eR, Operator::Lt, 0, mask});
+          z = 0*oL; z[oL < oR] = 1;
+          cache_if_better(cn, z, Expr{&eL, &eR, Operator::Lt, 0, mask});
         }
         if (Use_BitOr && eL.prec() >= 6 && eR.prec() > 6) {
           cache_if_better(cn, oL | oR, Expr{&eL, &eR, Operator::BitOr, 0, mask});
@@ -261,10 +262,12 @@ void find_expressions(int n) {
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
           if (Use_Or && ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::Or, 0, mask});
+            z = 0*oL; z[oL == oR] = 1;
+            cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::Or, 0, mask});
         }
         if (Use_Leq && eL.prec() >= 5 && eR.prec() > 5) {
-          cache_if_better(cn, +(oL <= oR), Expr{&eL, &eR, Operator::Leq, 0, mask});
+          z = 0*oL; z[oL <= oR] = 1;
+          cache_if_better(cn, z, Expr{&eL, &eR, Operator::Leq, 0, mask});
         }
         if (eL.prec() > 9 && eR.prec() >= 9 && (oR >= 0).min() && (oR <= 31).min()) {
           if (Use_BitShl) cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0, mask});
@@ -291,7 +294,8 @@ void find_expressions(int n) {
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
           if (Use_Or && !ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::SpaceOr, 0, mask});
+            z = 0*oL; z[oL == oR] = 1;
+            cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::SpaceOr, 0, mask});
           if (Use_Or && ok_before_keyword(&eL) && !ok_after_keyword(&eR))
             cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0, mask});
         }
