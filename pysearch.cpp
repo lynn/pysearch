@@ -14,7 +14,7 @@ static const Input inputs[] = {
      {"x", {  1, 3, 5, 7, 9 } },
 };
 static const Vec goal =
-           { -1, 2, 4, 6, 8 };
+           {  2, 3, 5, 7, 9 };
 
 const int max_length = 14;
 
@@ -262,7 +262,7 @@ void find_expressions(int n) {
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
           if (Use_Or && ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            z = 0*oL; z[oL == oR] = 1;
+            z = 0*oL; z[oL == 0] = 1;
             cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::Or, 0, mask});
         }
         if (Use_Leq && eL.prec() >= 5 && eR.prec() > 5) {
@@ -294,10 +294,10 @@ void find_expressions(int n) {
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
           if (Use_Or && !ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            z = 0*oL; z[oL == oR] = 1;
+            z = 0*oL; z[oL == 0] = 1;
             cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::SpaceOr, 0, mask});
           if (Use_Or && ok_before_keyword(&eL) && !ok_after_keyword(&eR))
-            cache_if_better(cn, oL + oR * +(oL == 0), Expr{&eL, &eR, Operator::OrSpace, 0, mask});
+            cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::OrSpace, 0, mask});
         }
       }
     }
