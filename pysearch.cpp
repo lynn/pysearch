@@ -11,17 +11,16 @@ struct Input { const char *name; Vec vec; };
 // ---- start of parameters ---
 
 static const Input inputs[] = {
-  {"x", {32,32,32,32,9608,9608,9608,9608} },
-  {"y", {32,32,9608,9608,32,32,9608,9608} },
-  {"z", {32,9608,32,9608,32,9608,32,9608} },
+     {"x", {  1, 3, 5, 7, 9 } },
 };
 static const Vec goal =
-  { 0, 1, 1, 1, 0, 1, 1, 0 };
+           { -1, 2, 4, 6, 8 };
 
-const int max_length = 15;
+const int max_length = 14;
 
-// static const int literals[] = {2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
-static const int literals[] = {2,3,4,5,6,7,8,9};
+// static const int literals[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99 };
+// static const int literals[] = { 1, 2, 3, 4, 510, 511, 512, 513, 514 };
+static const int literals[] = {1,2,3,4,5,6,7,8,9,10,11,12,};
 
 const bool Use_Or = true;
 const bool Use_Lt = true;
@@ -31,14 +30,15 @@ const bool Use_BitXor = true;
 const bool Use_BitAnd = true;
 const bool Use_BitShl = true;
 const bool Use_BitShr = true;
+const bool Use_BitNeg = true;
 const bool Use_Add = true;
 const bool Use_Sub = true;
 const bool Use_Mul = true;
 const bool Use_Mod = true;
-const bool Use_Div = true;
+const bool Use_Div1 = false;  /* / */
+const bool Use_Div2 = true;  /* // */
 const bool Use_Gcd = false;
 const bool Use_Neg = true;
-const bool Use_BitNeg = true;
 const bool Use_Exp = true;
 
 const bool CStyleMod = false;
@@ -84,8 +84,9 @@ enum class Operator : int32_t {
   Sub = 0xA01,
   Mul = 0xB00,
   Mod = 0xB01,
-  Div = 0xB02,
-  Gcd = 0xB03, // doesn't exist in python
+  Div1 = 0xB02,
+  Div2 = 0xB03,
+  Gcd = 0xB04, // doesn't exist in python
   Neg = 0xC00,
   BitNeg = 0xC01,
   Exp = 0xD00,
@@ -123,7 +124,8 @@ void print_operator(Operator op) {
     case Operator::Sub: printf("-"); break;
     case Operator::Mul: printf("*"); break;
     case Operator::Mod: putchar('%'); break;
-    case Operator::Div: printf("/"); break;
+    case Operator::Div1: printf("/"); break;
+    case Operator::Div2: printf("//"); break;
     case Operator::Gcd: printf("∨"); break;
     case Operator::Neg: printf("-"); break;
     case Operator::BitNeg: printf("~"); break;
@@ -243,11 +245,11 @@ void find_expressions(int n) {
           if ((oR != 0 && (oL != int_min || oR != -1)).min()) {
             if (CStyleMod) {
               if (Use_Mod) cache_if_better(cn, oL % oR, Expr{&eL, &eR, Operator::Mod, 0, mask});
-              if (Use_Div) cache_if_better(cn, oL / oR, Expr{&eL, &eR, Operator::Div, 0, mask});
+              if (Use_Div1) cache_if_better(cn, oL / oR, Expr{&eL, &eR, Operator::Div1, 0, mask});
             } else {
               auto mod = ((oL % oR) + oR) % oR;
               if (Use_Mod) cache_if_better(cn, mod, Expr{&eL, &eR, Operator::Mod, 0, mask});
-              if (Use_Div) cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div, 0, mask});
+              if (Use_Div1) cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div1, 0, mask});
             }
           }
           if (Use_Gcd) cache_if_better(cn, gcd(oL, oR), Expr{&eL, &eR, Operator::Gcd, 0, mask});
@@ -268,7 +270,17 @@ void find_expressions(int n) {
           if (Use_BitShl) cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0, mask});
           if (Use_BitShr) cache_if_better(cn, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0, mask});
         }
-        if (eL.prec() > 13 && eR.prec() >= 13 && (oR >= 0).min() && (oR <= 10).min()) {
+        if (eL.prec() >= 11 && eR.prec() > 11) {
+          if ((oR != 0 && (oL != int_min || oR != -1)).min()) {
+            if (CStyleMod) {
+              if (Use_Div2) cache_if_better(cn, oL / oR, Expr{&eL, &eR, Operator::Div2, 0, mask});
+            } else {
+              auto mod = ((oL % oR) + oR) % oR;
+              if (Use_Div2) cache_if_better(cn, (oL - mod) / oR, Expr{&eL, &eR, Operator::Div2, 0, mask});
+            }
+          }
+        }
+        if (eL.prec() > 13 && eR.prec() >= 13 && (oR >= 0).min() && (oR <= 6).min()) {
           if (Use_Exp) cache_if_better(cn, ipow(oL, oR), Expr{&eL, &eR, Operator::Exp, 0, mask});
         }
       }
@@ -308,7 +320,7 @@ int main() {
     printf("Found %zu expressions.\n", cache[n].size());
     bool first = true;
     for (const auto &[oR, eR] : cache[n]) {
-      if (( oR != goal ).max())
+      if (( (oR) != goal ).max())
         continue;
       if (first) {
         printf("\n--- Length %d ---\n", n);
