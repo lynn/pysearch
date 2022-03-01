@@ -11,7 +11,7 @@ struct Input { const char *name; Vec vec; };
 // ---- start of parameters ---
 
 static const Input inputs[] = {
-     {"x", {  1, 3, 5, 7, 9 } },
+     {"x", {  0, 3, 5, 7, 9 } },
 };
 static const Vec goal =
            {  2, 3, 5, 7, 9 };
@@ -22,7 +22,7 @@ const int max_length = 14;
 // static const int literals[] = { 1, 2, 3, 4, 510, 511, 512, 513, 514 };
 static const int literals[] = {1,2,3,4,5,6,7,8,9,10,11,12,};
 
-const bool Use_Or = true;
+const bool Use_Or = false;
 const bool Use_Lt = true;
 const bool Use_Leq = true;
 const bool Use_BitOr = true;
@@ -261,8 +261,8 @@ void find_expressions(int n) {
         if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
+          z = 0*oL; z[oL == 0] = 1;
           if (Use_Or && ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            z = 0*oL; z[oL == 0] = 1;
             cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::Or, 0, mask});
         }
         if (Use_Leq && eL.prec() >= 5 && eR.prec() > 5) {
@@ -293,8 +293,8 @@ void find_expressions(int n) {
         if (!ReuseVars && (eL.var_mask & eR.var_mask)) continue;
         const auto mask = eL.var_mask | eR.var_mask;
         if (eL.prec() >= 3 && eR.prec() > 3) {
+          z = 0*oL, z[oL == 0] = 1;
           if (Use_Or && !ok_before_keyword(&eL) && ok_after_keyword(&eR))
-            z = 0*oL; z[oL == 0] = 1;
             cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::SpaceOr, 0, mask});
           if (Use_Or && ok_before_keyword(&eL) && !ok_after_keyword(&eR))
             cache_if_better(cn, oL + oR * z, Expr{&eL, &eR, Operator::OrSpace, 0, mask});
