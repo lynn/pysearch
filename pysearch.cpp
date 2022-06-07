@@ -145,12 +145,10 @@ void print_expression(const Expr *expr) {
     if (expr->op == Operator::Parens) {
       putchar(')');
     }
-  } else if (expr->literal != 0) {
-    if (expr->literal < 0) {
-      printf("%s", inputs[~expr->literal].name);
-    } else {
-      printf("%d", expr->literal);
-    }
+  } else if (expr->literal < 0) {
+    printf("%s", inputs[~expr->literal].name);
+  } else {
+    printf("%d", expr->literal);
   }
 }
 
