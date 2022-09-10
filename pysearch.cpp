@@ -42,7 +42,7 @@ const bool Use_Neg = true;
 const bool Use_Exp = true;
 
 const bool CStyleMod = false;
-const bool ReuseVars = true;
+const bool ReuseVars = false;
 
 // ---- end of parameters ---
 
@@ -197,6 +197,19 @@ int positive_integer_length(int k) {
 }
 
 void cache_if_better(CacheLevel& level, const Vec& output, const Expr& expr) {
+  const int32_t all_mask = (1 << (sizeof(inputs) / sizeof(inputs[0]))) - 1;
+  if (!ReuseVars && expr.var_mask == all_mask) {
+    std::unordered_map<int, int> mp;
+    for (int i = 0; i < output.size(); i++) {
+      if (mp.count(output[i])) {
+        if (mp[output[i]] != goal[i])
+          return;
+      } else {
+        mp[output[i]] = goal[i];
+      }
+    }
+  }
+
   // if it doesn't exist, "old" is a default-constructed Expr with prec == 0 so it all works out.
   auto old = level[output];
   if (expr.prec() > old.prec()) {
