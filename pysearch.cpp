@@ -42,7 +42,7 @@ const bool Use_Neg = true;
 const bool Use_Exp = true;
 
 const bool CStyleMod = false;
-const bool ReuseVars = false;
+const bool ReuseVars = true;
 
 // ---- end of parameters ---
 
