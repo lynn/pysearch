@@ -201,11 +201,9 @@ void cache_if_better(CacheLevel& level, const Vec& output, const Expr& expr) {
   if (!ReuseVars && expr.var_mask == all_mask) {
     std::unordered_map<int, int> mp;
     for (int i = 0; i < output.size(); i++) {
-      if (mp.count(output[i])) {
-        if (mp[output[i]] != goal[i])
-          return;
-      } else {
-        mp[output[i]] = goal[i];
+      const auto [it, emplaced] = mp.try_emplace(output[i], goal[i]);
+      if (!emplaced && it->second != goal[i]) {
+        return;
       }
     }
   }
