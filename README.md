@@ -6,68 +6,71 @@ Brute-force search tool for short Python expressions (for code golf).
 
 Edit the search parameters at the top of `src/params.rs`, then run `cargo run --release`.
 
+If your input/goal vectors have length ≤8, you can try `cargo run --release --features simd` (this should be faster).
+
 ## Example
 
-I wrote this program to find a short expression that computes the next number in [this code golf problem](http://golf.shinh.org/p.rb?reversed+even+or+odd+first).
-
-I had an answer of the form:
+Let's golf this Python code!
 
 ```py
-n=x=input()
-exec"print x;x=expression;"*n
+x = y = 0
+for c in input():
+    if c == 'E': x += 1
+    if c == 'W': x -= 1
+    if c == 'N': y += 1
+    if c == 'S': y -= 1
+    print(x, y)
 ```
 
-and wanted to find a shorter `expression` in terms of `n` and `x`.
+It reads a string of compass direction letters and prints coordinates walking across a grid. Let's say the rules guarantee that this string will only consist of `EWNS` and no other letters.
 
-- When `n` is 100, it should map `x` like so: 100→98, 98→96 … 2→99, 99→97 ….
-- When `n` is 53, it should map `x` like so: 53→51 … 1→52 … 20→18 … 4→2.
+```py
+x=y=0
+for c in input():x+=(c=='E')-(c=='W');y+=(c=='N')-(c=='S');print(x,y)
+```
 
-(These eight points to "sample" the behavior of the desired equation at are chosen somewhat ad-hoc. Basically I add a data point when the search program outputs invalid fits.)
+Let's introduce numbers we can do math on. This makes the code longer for now, but it'll pay off:
 
-I express this constraint in the search program as a sort of pointwise vector equation:
+```py
+x=y=0
+for n in map(ord,input()):x+=(n==69)-(n==87);y+=(n==78)-(n==83);print(x,y)
+```
+
+It'd be nice to golf down `x+=(n==69)-(n==87)`. We just need _any_ expression that maps the possible inputs (69, 87, 78, 83) to (1, -1, 0, 0). We ask pysearch:
 
 ```rs
-pub const INPUTS: [Input; 2] = [
-    Input {
-        name: "n",
-        vec: [100, 100, 100, 100, 53, 53, 53, 53],
-    },
-    Input {
-        name: "x",
-        vec: [100, 98, 2, 99, 53, 1, 20, 4],
-    },
-];
+pub const INPUTS: &[Input] = &[Input {
+    name: "n",
+    vec: &[69, 87, 78, 83],
+}];
 
-pub const GOAL: Nums = [98, 96, 99, 97, 51, 52, 18, 2];
+pub const GOAL: &[Num] = &[1, -1, 0, 0];
 ```
 
-The program collects all valid expressions over {`n`, `x`, some integer literals} up to the given length, and spits out the ones that match `goal`:
+And it finds `n%5-3`:
 
 ```txt
+$ cargo run --release --features simd
 Finding length 1...
+Found 10 expressions in 1.236ms.
 Finding length 2...
+Found 43 expressions in 2.073ms.
 Finding length 3...
+Found 112 expressions in 2.5362ms.
 Finding length 4...
+Found 496 expressions in 3.1818ms.
 Finding length 5...
-Finding length 6...
-Finding length 7...
-Finding length 8...
-Finding length 9...
-Finding length 10...
-Finding length 11...
+Found 2526 expressions in 5.7068ms.
 
---- Length 10 ---
-~1%x or~-n
-
---- Length 11 ---
-~1%x or~n%n
-(x-2or-1)%n
+--- Length 5 ---
+n%5-3
 ```
 
-And sure enough, filling in `x=-2%x or~-n` yields a winning 41-byte Python submission.
+So we can just write `x+=n%5-3`.
 
-## TODO
+We do the same for `y`, with `GOAL = [0, 0, 1, -1]`, and it finds `1-n//2%3`. Now our code is a lot shorter.
 
-Support `and`, and make the whole "keyword operator" situation a little less ugly.
-
-Support comparison operators. Python chaining syntax makes this a bit complex.
+```py
+x=y=0
+for n in map(ord,input()):x+=n%5-3;y+=1-n//2%3;print(x,y)
+```
