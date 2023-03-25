@@ -4,7 +4,7 @@ pub mod operator;
 pub mod params;
 pub mod vec;
 
-use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask, Literal};
+use expr::{ok_after_keyword, ok_before_keyword, Expr, Literal, Mask};
 use operator::Operator;
 use params::*;
 use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
@@ -74,6 +74,9 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             // 1-byte operators
             if n >= k + 2 {
                 for (ol, el) in cache[n - k - 1].iter() {
+                    if er.is_literal() && el.is_literal() {
+                        continue;
+                    }
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -137,6 +140,9 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             // 2-byte operators
             if n >= k + 3 {
                 for (ol, el) in cache[n - k - 2].iter() {
+                    if er.is_literal() && el.is_literal() {
+                        continue;
+                    }
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -197,6 +203,9 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             // 3-byte operators
             if n >= k + 4 {
                 for (ol, el) in cache[n - k - 3].iter() {
+                    if er.is_literal() && el.is_literal() {
+                        continue;
+                    }
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {

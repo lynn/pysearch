@@ -39,6 +39,10 @@ impl Expr {
         }
     }
 
+    pub fn is_literal(&self) -> bool {
+        self.literal > 0
+    }
+
     pub fn bin(el: NonNull<Expr>, er: NonNull<Expr>, op: Operator, var_mask: Mask) -> Self {
         Self {
             left: Some(el),
