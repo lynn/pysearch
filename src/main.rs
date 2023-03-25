@@ -9,8 +9,6 @@ use operator::Operator;
 use params::*;
 use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
-use ndarray::Array;
-
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ptr::NonNull;
@@ -58,13 +56,13 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     let mut cn = CacheLevel::new();
     if n == 1 {
         for (i, input) in INPUTS.iter().enumerate() {
-            let vec: Vector = Array::from_iter(input.vec.to_owned());
+            let vec: Vector = Vector(input.vec.to_owned().into_boxed_slice());
             cn.insert(vec, Expr::variable(i as Literal));
         }
     }
     for &lit in LITERALS {
         if positive_integer_length(lit) == n {
-            let vec: Vector = Array::from_elem(GOAL.len(), lit);
+            let vec: Vector = Vector(vec![lit; GOAL.len()].into_boxed_slice());
             cn.insert(vec, Expr::literal(lit as Literal));
         }
     }
@@ -91,33 +89,37 @@ fn find_expressions(cache: &mut Cache, n: usize) {
                         );
                     }
                     if USE_BIT_OR && el.prec() >= 6 && er.prec() > 6 {
-                        save(&mut cn, ol | or, Expr::bin(elp, erp, Operator::BitOr, mask));
+                        save(
+                            &mut cn,
+                            ol.clone() | or,
+                            Expr::bin(elp, erp, Operator::BitOr, mask),
+                        );
                     }
                     if USE_BIT_XOR && el.prec() >= 7 && er.prec() > 7 {
                         save(
                             &mut cn,
-                            ol ^ or,
+                            ol.clone() ^ or,
                             Expr::bin(elp, erp, Operator::BitXor, mask),
                         );
                     }
                     if USE_BIT_AND && el.prec() >= 8 && er.prec() > 8 {
                         save(
                             &mut cn,
-                            ol & or,
+                            ol.clone() & or,
                             Expr::bin(elp, erp, Operator::BitAnd, mask),
                         );
                     }
                     if el.prec() >= 10 && er.prec() > 10 {
                         if USE_ADD {
-                            save(&mut cn, ol + or, Expr::bin(elp, erp, Operator::Add, mask));
+                            save(&mut cn, ol.clone() + or, Expr::bin(elp, erp, Operator::Add, mask));
                         }
                         if USE_SUB {
-                            save(&mut cn, ol - or, Expr::bin(elp, erp, Operator::Sub, mask));
+                            save(&mut cn, ol.clone() - or, Expr::bin(elp, erp, Operator::Sub, mask));
                         }
                     }
                     if el.prec() >= 11 && er.prec() > 11 {
                         if USE_MUL {
-                            save(&mut cn, ol * or, Expr::bin(elp, erp, Operator::Mul, mask));
+                            save(&mut cn, ol.clone() * or, Expr::bin(elp, erp, Operator::Mul, mask));
                         }
                         if let Some((div, modulo)) = divmod(ol, or) {
                             if USE_MOD {
@@ -172,14 +174,14 @@ fn find_expressions(cache: &mut Cache, n: usize) {
                         if USE_BIT_SHL {
                             save(
                                 &mut cn,
-                                ol << or,
+                                ol.clone() << or,
                                 Expr::bin(elp, erp, Operator::BitShl, mask),
                             );
                         }
                         if USE_BIT_SHR {
                             save(
                                 &mut cn,
-                                ol >> or,
+                                ol.clone() >> or,
                                 Expr::bin(elp, erp, Operator::BitShr, mask),
                             );
                         }
@@ -242,10 +244,10 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             let erp: NonNull<Expr> = er.into();
             if er.prec() >= 12 {
                 if USE_BIT_NEG {
-                    save(&mut cn, !or, Expr::unary(erp, Operator::BitNeg));
+                    save(&mut cn, !or.clone(), Expr::unary(erp, Operator::BitNeg));
                 }
                 if USE_NEG {
-                    save(&mut cn, -or, Expr::unary(erp, Operator::Neg));
+                    save(&mut cn, -or.clone(), Expr::unary(erp, Operator::Neg));
                 }
             }
         }

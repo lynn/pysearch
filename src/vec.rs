@@ -1,57 +1,134 @@
-use std::ops::RangeBounds;
-
-use ndarray::{Array, Ix1};
+use std::ops::{Deref, DerefMut, RangeBounds};
 
 use crate::{
     gcd::gcd,
     params::{Num, C_STYLE_MOD, GOAL},
 };
 
-pub type Vector = Array<Num, Ix1>;
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Vector(pub Box<[Num]>);
+
+impl Deref for Vector {
+    type Target = Box<[Num]>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Vector {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+macro_rules! impl_op {
+    ($trait:ident, $func:ident, $op:tt) => {
+        impl std::ops::$trait<&Self> for Vector {
+            type Output = Vector;
+
+            fn $func(mut self, rhs: &Self) -> Self::Output {
+                for (x, y) in self.iter_mut().zip(rhs.iter()) {
+                    *x $op y;
+                }
+                self
+            }
+        }
+    }
+}
+
+macro_rules! impl_unary {
+    ($trait:ident, $func:ident, $op:tt) => {
+        impl std::ops::$trait for Vector {
+            type Output = Vector;
+
+            fn $func(mut self) -> Self::Output {
+                for x in self.iter_mut() {
+                    *x = $op(*x);
+                }
+                self
+            }
+        }
+    };
+}
+
+impl_op!(Add, add, +=);
+impl_op!(Sub, sub, -=);
+impl_op!(Mul, mul, *=);
+impl_op!(Div, div, /=);
+impl_op!(Rem, rem, %=);
+impl_op!(BitAnd, bitand, &=);
+impl_op!(BitOr, bitor, |=);
+impl_op!(BitXor, bitxor, ^=);
+impl_op!(Shl, shl, <<=);
+impl_op!(Shr, shr, >>=);
+impl_unary!(Not, not, !);
+impl_unary!(Neg, neg, -);
 
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if left
         .iter()
-        .zip(right)
+        .zip(right.iter())
         .any(|(&x, &y)| y == 0 || (x, y) == (Num::MIN, -1))
     {
         None
     } else if C_STYLE_MOD {
-        Some((left / right, left % right))
+        Some((left.clone() / right, left.clone() % right))
     } else {
-        let modulo = (left % right + right) % right;
-        let div = (left - modulo.clone()) / right;
+        let modulo = (left.clone() % right + right) % right;
+        let div = (left.clone() - &modulo) / right;
         Some((div, modulo))
     }
 }
 
 pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
-    Array::from_shape_fn(
-        GOAL.len(),
-        |i| if left[i] == 0 { right[i] } else { left[i] },
-    )
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        if *x == 0 {
+            *x = *y;
+        }
+    }
+    left
 }
 
 pub fn vec_eq(left: &Vector, right: &Vector) -> Vector {
-    Array::from_shape_fn(GOAL.len(), |i| (left[i] == right[i]) as Num)
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        *x = (*x == *y) as Num;
+    }
+    left
 }
 
 pub fn vec_lt(left: &Vector, right: &Vector) -> Vector {
-    Array::from_shape_fn(GOAL.len(), |i| (left[i] < right[i]) as Num)
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        *x = (*x < *y) as Num;
+    }
+    left
 }
 
 pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
-    Array::from_shape_fn(GOAL.len(), |i| (left[i] <= right[i]) as Num)
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        *x = (*x <= *y) as Num;
+    }
+    left
 }
 
 pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
-    Array::from_shape_fn(GOAL.len(), |i| gcd(left[i], right[i]))
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        *x = gcd(*x, *y);
+    }
+    left
 }
 
 pub fn vec_pow(left: &Vector, right: &Vector) -> Vector {
-    let mut k = left.clone();
-    k.zip_mut_with(right, |x, y| *x = x.pow(*y as u32));
-    k
+    let mut left = left.clone();
+    for (x, y) in left.iter_mut().zip(right.iter()) {
+        *x = (*x).pow(*y as u32);
+    }
+    left
 }
 
 pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
