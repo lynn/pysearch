@@ -2,13 +2,12 @@ pub mod gcd;
 
 use crate::gcd::gcd;
 
-use ndarray::prelude::*;
 use ndarray::{Array, Ix1};
-use std::collections::hash_map::Entry;
+
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::num::Wrapping;
-use std::sync::{Mutex, RwLock};
+
+use std::sync::RwLock;
 
 type Num = i32;
 type Vec = Array<Num, Ix1>;
@@ -54,13 +53,13 @@ enum Operator {
     Or = 0x300,
     SpaceOr = 0x301,
     OrSpace = 0x302,
-    SpaceOrSpace = 0x303,
+    // SpaceOrSpace = 0x303,
     Lt = 0x500,
     Leq = 0x501,
-    Gt = 0x502,
-    Geq = 0x503,
-    Eq = 0x504,
-    Neq = 0x505,
+    // Gt = 0x502,
+    // Geq = 0x503,
+    // Eq = 0x504,
+    // Neq = 0x505,
     BitOr = 0x600,
     BitXor = 0x700,
     BitAnd = 0x800,
@@ -101,13 +100,13 @@ impl Display for Operator {
             Operator::Or => write!(f, "or"),
             Operator::SpaceOr => write!(f, " or"),
             Operator::OrSpace => write!(f, "or "),
-            Operator::SpaceOrSpace => write!(f, " or "),
+            // Operator::SpaceOrSpace => write!(f, " or "),
             Operator::Lt => write!(f, "<"),
             Operator::Leq => write!(f, "<="),
-            Operator::Gt => write!(f, ">"),
-            Operator::Geq => write!(f, ">="),
-            Operator::Eq => write!(f, "=="),
-            Operator::Neq => write!(f, "!="),
+            // Operator::Gt => write!(f, ">"),
+            // Operator::Geq => write!(f, ">="),
+            // Operator::Eq => write!(f, "=="),
+            // Operator::Neq => write!(f, "!="),
             Operator::BitOr => write!(f, "|"),
             Operator::BitXor => write!(f, "^"),
             Operator::BitAnd => write!(f, "&"),
@@ -182,8 +181,8 @@ fn cache_if_better(level: &RwLock<CacheLevel>, output: Vec, expr: Expr) {
     let all_mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == all_mask {
         let mut mp: HashMap<Num, Num> = HashMap::new();
-        for i in 0..output.len() {
-            if let Some(old) = mp.insert(output[i], GOAL[i]) {
+        for (i, o) in output.iter().enumerate() {
+            if let Some(old) = mp.insert(*o, GOAL[i]) {
                 if old != GOAL[i] {
                     return;
                 }
@@ -207,8 +206,8 @@ fn cache_if_better(level: &RwLock<CacheLevel>, output: Vec, expr: Expr) {
 unsafe fn find_expressions(cache: &Cache, n: usize) {
     let cn = &cache[&n];
     if n == 1 {
-        for i in 0..INPUTS.len() {
-            let vec: Vec = Array::from_iter(INPUTS[i].vec);
+        for (i, x) in INPUTS.iter().enumerate() {
+            let vec: Vec = Array::from_iter(x.vec);
             cn.try_write().unwrap().insert(
                 vec,
                 Expr {
@@ -239,76 +238,76 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
 
     let dim = GOAL.len();
 
-    for nR in 1..n {
-        for (oR, eR) in &*cache[&nR].read().unwrap() {
+    for k in 1..n {
+        for (or, er) in &*cache[&k].read().unwrap() {
             // 1-byte operators
-            if n >= nR + 2 {
-                for (oL, eL) in &*cache[&(n - nR - 1)].read().unwrap() {
-                    if !REUSE_VARS && (eL.var_mask & eR.var_mask != 0) {
+            if n >= k + 2 {
+                for (ol, el) in &*cache[&(n - k - 1)].read().unwrap() {
+                    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
                         continue;
                     }
-                    let mask = eL.var_mask | eR.var_mask;
-                    if USE_LT && eL.prec() >= 5 && eR.prec() > 5 {
-                        let z = Array::from_shape_fn(GOAL.len(), |i| (oL[i] < oR[i]) as Num);
+                    let mask = el.var_mask | er.var_mask;
+                    if USE_LT && el.prec() >= 5 && er.prec() > 5 {
+                        let z = Array::from_shape_fn(GOAL.len(), |i| (ol[i] < or[i]) as Num);
                         cache_if_better(
                             cn,
                             z,
                             Expr {
-                                left: Some(&*eL),
-                                right: Some(&*eR),
+                                left: Some(el),
+                                right: Some(er),
                                 op: Operator::Lt,
                                 literal: 0,
                                 var_mask: mask,
                             },
                         );
                     }
-                    if USE_BIT_OR && eL.prec() >= 6 && eR.prec() > 6 {
+                    if USE_BIT_OR && el.prec() >= 6 && er.prec() > 6 {
                         cache_if_better(
                             cn,
-                            oL | oR,
+                            ol | or,
                             Expr {
-                                left: Some(&*eL),
-                                right: Some(&*eR),
+                                left: Some(el),
+                                right: Some(er),
                                 op: Operator::BitOr,
                                 literal: 0,
                                 var_mask: mask,
                             },
                         );
                     }
-                    if USE_BIT_XOR && eL.prec() >= 7 && eR.prec() > 7 {
+                    if USE_BIT_XOR && el.prec() >= 7 && er.prec() > 7 {
                         cache_if_better(
                             cn,
-                            oL ^ oR,
+                            ol ^ or,
                             Expr {
-                                left: Some(&*eL),
-                                right: Some(&*eR),
+                                left: Some(el),
+                                right: Some(er),
                                 op: Operator::BitXor,
                                 literal: 0,
                                 var_mask: mask,
                             },
                         );
                     }
-                    if USE_BIT_AND && eL.prec() >= 8 && eR.prec() > 8 {
+                    if USE_BIT_AND && el.prec() >= 8 && er.prec() > 8 {
                         cache_if_better(
                             cn,
-                            oL & oR,
+                            ol & or,
                             Expr {
-                                left: Some(&*eL),
-                                right: Some(&*eR),
+                                left: Some(el),
+                                right: Some(er),
                                 op: Operator::BitAnd,
                                 literal: 0,
                                 var_mask: mask,
                             },
                         );
                     }
-                    if eL.prec() >= 10 && eR.prec() > 10 {
+                    if el.prec() >= 10 && er.prec() > 10 {
                         if USE_ADD {
                             cache_if_better(
                                 cn,
-                                oL + oR,
+                                ol + or,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::Add,
                                     literal: 0,
                                     var_mask: mask,
@@ -318,10 +317,10 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                         if USE_SUB {
                             cache_if_better(
                                 cn,
-                                oL - oR,
+                                ol - or,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::Sub,
                                     literal: 0,
                                     var_mask: mask,
@@ -329,42 +328,42 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                             );
                         }
                     }
-                    if eL.prec() >= 11 && eR.prec() > 11 {
+                    if el.prec() >= 11 && er.prec() > 11 {
                         if USE_MUL {
                             cache_if_better(
                                 cn,
-                                oL * oR,
+                                ol * or,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::Mul,
                                     literal: 0,
                                     var_mask: mask,
                                 },
                             );
                         }
-                        if (0..dim).all(|i| oR[i] != 0 && (oL[i] != Num::MIN || oR[i] != -1)) {
+                        if (0..dim).all(|i| or[i] != 0 && (ol[i] != Num::MIN || or[i] != -1)) {
                             if C_STYLE_MOD {
-                                if (USE_MOD) {
+                                if USE_MOD {
                                     cache_if_better(
                                         cn,
-                                        oL % oR,
+                                        ol % or,
                                         Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
+                                            left: Some(el),
+                                            right: Some(er),
                                             op: Operator::Mod,
                                             literal: 0,
                                             var_mask: mask,
                                         },
                                     );
                                 }
-                                if (USE_DIV1) {
+                                if USE_DIV1 {
                                     cache_if_better(
                                         cn,
-                                        oL / oR,
+                                        ol / or,
                                         Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
+                                            left: Some(el),
+                                            right: Some(er),
                                             op: Operator::Div1,
                                             literal: 0,
                                             var_mask: mask,
@@ -372,27 +371,27 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                                     );
                                 }
                             } else {
-                                let modulo = ((oL % oR) + oR) % oR;
-                                if (USE_MOD) {
+                                let modulo = ((ol % or) + or) % or;
+                                if USE_MOD {
                                     cache_if_better(
                                         cn,
                                         modulo.clone(),
                                         Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
+                                            left: Some(el),
+                                            right: Some(er),
                                             op: Operator::Mod,
                                             literal: 0,
                                             var_mask: mask,
                                         },
                                     );
                                 }
-                                if (USE_DIV1) {
+                                if USE_DIV1 {
                                     cache_if_better(
                                         cn,
-                                        (oL - modulo) / oR,
+                                        (ol - modulo) / or,
                                         Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
+                                            left: Some(el),
+                                            right: Some(er),
                                             op: Operator::Div1,
                                             literal: 0,
                                             var_mask: mask,
@@ -401,14 +400,14 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                                 }
                             }
                         }
-                        if (USE_GCD) {
-                            let z = Array::from_shape_fn(GOAL.len(), |i| gcd(oL[i], oR[i]));
+                        if USE_GCD {
+                            let z = Array::from_shape_fn(GOAL.len(), |i| gcd(ol[i], or[i]));
                             cache_if_better(
                                 cn,
                                 z,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::Gcd,
                                     literal: 0,
                                     var_mask: mask,
@@ -419,76 +418,75 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                 }
             }
             // 2-byte operators
-            if n >= nR + 3 {
-                for (oL, eL) in &*cache[&(n - nR - 2)].read().unwrap() {
-                    if !REUSE_VARS && (eL.var_mask & eR.var_mask != 0) {
+            if n >= k + 3 {
+                for (ol, el) in &*cache[&(n - k - 2)].read().unwrap() {
+                    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
                         continue;
                     }
-                    let mask = eL.var_mask | eR.var_mask;
-                    if eL.prec() >= 3 && eR.prec() > 3 {
-                        if USE_OR && ok_before_keyword(&*eL) && ok_after_keyword(&*eR) {
-                            let z = Array::from_shape_fn(GOAL.len(), |i| {
-                                if oL[i] == 0 {
-                                    oR[i]
-                                } else {
-                                    oL[i]
-                                }
-                            });
-                            cache_if_better(
-                                cn,
-                                z,
-                                Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
-                                    op: Operator::Or,
-                                    literal: 0,
-                                    var_mask: mask,
-                                },
-                            );
-                        }
-                    }
-                    if (USE_LEQ && eL.prec() >= 5 && eR.prec() > 5) {
-                        let z =
-                            Array::from_shape_fn(
-                                GOAL.len(),
-                                |i| if oL[i] <= oR[i] { 1 } else { 0 },
-                            );
+                    let mask = el.var_mask | er.var_mask;
+                    if el.prec() >= 3
+                        && er.prec() > 3
+                        && USE_OR
+                        && ok_before_keyword(el)
+                        && ok_after_keyword(er)
+                    {
+                        let z = Array::from_shape_fn(GOAL.len(), |i| {
+                            if ol[i] == 0 {
+                                or[i]
+                            } else {
+                                ol[i]
+                            }
+                        });
                         cache_if_better(
                             cn,
                             z,
                             Expr {
-                                left: Some(&*eL),
-                                right: Some(&*eR),
+                                left: Some(el),
+                                right: Some(er),
+                                op: Operator::Or,
+                                literal: 0,
+                                var_mask: mask,
+                            },
+                        );
+                    }
+                    if USE_LEQ && el.prec() >= 5 && er.prec() > 5 {
+                        let z = Array::from_shape_fn(GOAL.len(), |i| (ol[i] <= or[i]) as Num);
+                        cache_if_better(
+                            cn,
+                            z,
+                            Expr {
+                                left: Some(el),
+                                right: Some(er),
                                 op: Operator::Leq,
                                 literal: 0,
                                 var_mask: mask,
                             },
                         );
                     }
-                    if eL.prec() > 9
-                        && eR.prec() >= 9
-                        && (0..dim).all(|i| 0 <= oR[i] && oR[i] <= 31)
+                    if el.prec() > 9
+                        && er.prec() >= 9
+                        && (0..dim).all(|i| 0 <= or[i] && or[i] <= 31)
                     {
-                        if (USE_BIT_SHL) {
+                        if USE_BIT_SHL {
                             cache_if_better(
                                 cn,
-                                oL << oR,
+                                ol << or,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::BitShl,
                                     literal: 0,
                                     var_mask: mask,
                                 },
                             );
                         }
-                        if (USE_BIT_SHR) {
+                        if USE_BIT_SHR {
                             cache_if_better(
                                 cn,
-                                oL >> oR,
+                                ol >> or,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::BitShr,
                                     literal: 0,
                                     var_mask: mask,
@@ -496,96 +494,96 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
                             );
                         }
                     }
-                    if (eL.prec() >= 11 && eR.prec() > 11) {
-                        if (0..dim).all(|i| oR[i] != 0 && (oL[i] != Num::MIN || oR[i] != -1)) {
-                            if (C_STYLE_MOD) {
-                                if (USE_DIV2) {
-                                    cache_if_better(
-                                        cn,
-                                        oL / oR,
-                                        Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
-                                            op: Operator::Div2,
-                                            literal: 0,
-                                            var_mask: mask,
-                                        },
-                                    );
-                                }
-                            } else {
-                                let modulo = ((oL % oR) + oR) % oR;
-                                if (USE_DIV2) {
-                                    cache_if_better(
-                                        cn,
-                                        (oL - modulo) / oR,
-                                        Expr {
-                                            left: Some(&*eL),
-                                            right: Some(&*eR),
-                                            op: Operator::Div2,
-                                            literal: 0,
-                                            var_mask: mask,
-                                        },
-                                    );
-                                }
+                    if el.prec() >= 11
+                        && er.prec() > 11
+                        && (0..dim).all(|i| or[i] != 0 && (ol[i] != Num::MIN || or[i] != -1))
+                    {
+                        if C_STYLE_MOD {
+                            if USE_DIV2 {
+                                cache_if_better(
+                                    cn,
+                                    ol / or,
+                                    Expr {
+                                        left: Some(el),
+                                        right: Some(er),
+                                        op: Operator::Div2,
+                                        literal: 0,
+                                        var_mask: mask,
+                                    },
+                                );
+                            }
+                        } else {
+                            let modulo = ((ol % or) + or) % or;
+                            if USE_DIV2 {
+                                cache_if_better(
+                                    cn,
+                                    (ol - modulo) / or,
+                                    Expr {
+                                        left: Some(el),
+                                        right: Some(er),
+                                        op: Operator::Div2,
+                                        literal: 0,
+                                        var_mask: mask,
+                                    },
+                                );
                             }
                         }
                     }
-                    if eL.prec() > 13
-                        && eR.prec() >= 13
-                        && (0..dim).all(|i| 0 <= oR[i] && oR[i] <= 6)
+                    if el.prec() > 13
+                        && er.prec() >= 13
+                        && (0..dim).all(|i| 0 <= or[i] && or[i] <= 6)
+                        && USE_EXP
                     {
-                        if (USE_EXP) {
-                            let z = Array::from_shape_fn(GOAL.len(), |i| oL[i].pow(oR[i] as u32));
-                            cache_if_better(
-                                cn,
-                                z,
-                                Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
-                                    op: Operator::Exp,
-                                    literal: 0,
-                                    var_mask: mask,
-                                },
-                            );
-                        }
+                        let z = Array::from_shape_fn(GOAL.len(), |i| ol[i].pow(or[i] as u32));
+                        cache_if_better(
+                            cn,
+                            z,
+                            Expr {
+                                left: Some(el),
+                                right: Some(er),
+                                op: Operator::Exp,
+                                literal: 0,
+                                var_mask: mask,
+                            },
+                        );
                     }
                 }
             }
             // 3-byte operators
-            if n >= nR + 4 {
-                for (oL, eL) in &*cache[&(n - nR - 3)].read().unwrap() {
-                    if (!REUSE_VARS && (eL.var_mask & eR.var_mask != 0)) {
+            if n >= k + 4 {
+                for (ol, el) in &*cache[&(n - k - 3)].read().unwrap() {
+                    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
                         continue;
                     }
-                    let mask = eL.var_mask | eR.var_mask;
-                    if (eL.prec() >= 3 && eR.prec() > 3) {
+                    let mask = el.var_mask | er.var_mask;
+                    if el.prec() >= 3 && er.prec() > 3 {
                         let z = Array::from_shape_fn(GOAL.len(), |i| {
-                            if oL[i] == 0 {
-                                oR[i]
+                            if ol[i] == 0 {
+                                or[i]
                             } else {
-                                oL[i]
+                                ol[i]
                             }
                         });
-                        if (USE_OR && !ok_before_keyword(&*eL) && ok_after_keyword(&*eR)) {
+                        if USE_OR && !ok_before_keyword(el) && ok_after_keyword(er) {
                             cache_if_better(
                                 cn,
                                 z.clone(),
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::SpaceOr,
                                     literal: 0,
                                     var_mask: mask,
                                 },
                             );
                         }
-                        if (USE_OR && ok_before_keyword(&*eL) && !ok_after_keyword(&*eR)) {
+                        if USE_OR && ok_before_keyword(el) && !ok_after_keyword(er) {
                             cache_if_better(
                                 cn,
                                 z,
                                 Expr {
-                                    left: Some(&*eL),
-                                    right: Some(&*eR),
+                                    left: Some(el),
+                                    right: Some(er),
                                     op: Operator::OrSpace,
                                     literal: 0,
                                     var_mask: mask,
@@ -598,48 +596,48 @@ unsafe fn find_expressions(cache: &Cache, n: usize) {
         }
     }
     if n >= 3 {
-        for (oR, eR) in &*cache[&(n - 2)].read().unwrap() {
-            if (eR.op >= Operator::Parens) {
+        for (or, er) in &*cache[&(n - 2)].read().unwrap() {
+            if er.op >= Operator::Parens {
                 continue;
             }
             cn.write().unwrap().insert(
-                oR.clone(),
+                or.clone(),
                 Expr {
                     left: None,
-                    right: Some(&*eR),
+                    right: Some(er),
                     op: Operator::Parens,
                     literal: 0,
-                    var_mask: eR.var_mask,
+                    var_mask: er.var_mask,
                 },
             );
         }
     }
     if n >= 2 {
-        for (oR, eR) in &*cache[&(n - 1)].read().unwrap() {
-            if (eR.prec() >= 12) {
-                if (USE_BIT_NEG) {
+        for (or, er) in &*cache[&(n - 1)].read().unwrap() {
+            if er.prec() >= 12 {
+                if USE_BIT_NEG {
                     cache_if_better(
                         cn,
-                        !oR,
+                        !or,
                         Expr {
                             left: None,
-                            right: Some(&*eR),
+                            right: Some(er),
                             op: Operator::BitNeg,
                             literal: 0,
-                            var_mask: eR.var_mask,
+                            var_mask: er.var_mask,
                         },
                     );
                 }
-                if (USE_NEG) {
+                if USE_NEG {
                     cache_if_better(
                         cn,
-                        -oR,
+                        -or,
                         Expr {
                             left: None,
-                            right: Some(&*eR),
+                            right: Some(er),
                             op: Operator::Neg,
                             literal: 0,
-                            var_mask: eR.var_mask,
+                            var_mask: er.var_mask,
                         },
                     );
                 }
@@ -660,14 +658,14 @@ fn main() {
         }
         println!("Found {} expressions.", cache[&n].read().unwrap().len());
         let mut first: bool = true;
-        for (oR, eR) in &*cache[&n].read().unwrap() {
-            if GOAL.iter().enumerate().all(|(i, x)| *x == oR[i]) {
+        for (or, er) in &*cache[&n].read().unwrap() {
+            if GOAL.iter().enumerate().all(|(i, x)| *x == or[i]) {
                 if first {
                     println!("\n--- Length {n} ---");
                     first = false;
                     no_results = false;
                 }
-                println!("{}", eR);
+                println!("{}", er);
             }
         }
     }
