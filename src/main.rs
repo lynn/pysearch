@@ -250,7 +250,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             }
         }
     }
-    cache.insert(n, cn.into_iter().collect());
+    cache.push(cn.into_iter().collect());
 }
 
 fn main() {
@@ -272,7 +272,7 @@ fn main() {
                     first = false;
                     no_results = false;
                 }
-                println!("{}", expr);
+                println!("{expr}");
             }
         }
     }
