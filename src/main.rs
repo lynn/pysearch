@@ -1,12 +1,17 @@
+#![feature(portable_simd)]
 pub mod expr;
 pub mod gcd;
 pub mod operator;
 pub mod params;
+
+#[cfg_attr(feature = "simd", path = "vec_simd.rs")]
+#[cfg_attr(not(feature = "simd"), path = "vec.rs")]
 pub mod vec;
 
 use expr::{ok_after_keyword, ok_before_keyword, Expr, Literal, Mask};
 use operator::Operator;
 use params::*;
+
 use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
 use std::collections::hash_map::Entry;
@@ -31,8 +36,8 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr) {
     let all_mask: Mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == all_mask {
         let mut mp: HashMap<Num, Num> = HashMap::new();
-        for (i, o) in output.iter().enumerate() {
-            if let Some(old) = mp.insert(*o, GOAL[i]) {
+        for i in 0..GOAL.len() {
+            if let Some(old) = mp.insert(output[i], GOAL[i]) {
                 if old != GOAL[i] {
                     return;
                 }
@@ -56,13 +61,13 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     let mut cn = CacheLevel::new();
     if n == 1 {
         for (i, input) in INPUTS.iter().enumerate() {
-            let vec: Vector = Vector(input.vec.to_owned().into_boxed_slice());
+            let vec: Vector = Vector::from_slice(input.vec);
             cn.insert(vec, Expr::variable(i as Literal));
         }
     }
     for &lit in LITERALS {
         if positive_integer_length(lit) == n {
-            let vec: Vector = Vector(vec![lit; GOAL.len()].into_boxed_slice());
+            let vec: Vector = Vector::constant(lit);
             cn.insert(vec, Expr::literal(lit as Literal));
         }
     }
@@ -111,15 +116,27 @@ fn find_expressions(cache: &mut Cache, n: usize) {
                     }
                     if el.prec() >= 10 && er.prec() > 10 {
                         if USE_ADD {
-                            save(&mut cn, ol.clone() + or, Expr::bin(elp, erp, Operator::Add, mask));
+                            save(
+                                &mut cn,
+                                ol.clone() + or,
+                                Expr::bin(elp, erp, Operator::Add, mask),
+                            );
                         }
                         if USE_SUB {
-                            save(&mut cn, ol.clone() - or, Expr::bin(elp, erp, Operator::Sub, mask));
+                            save(
+                                &mut cn,
+                                ol.clone() - or,
+                                Expr::bin(elp, erp, Operator::Sub, mask),
+                            );
                         }
                     }
                     if el.prec() >= 11 && er.prec() > 11 {
                         if USE_MUL {
-                            save(&mut cn, ol.clone() * or, Expr::bin(elp, erp, Operator::Mul, mask));
+                            save(
+                                &mut cn,
+                                ol.clone() * or,
+                                Expr::bin(elp, erp, Operator::Mul, mask),
+                            );
                         }
                         if let Some((div, modulo)) = divmod(ol, or) {
                             if USE_MOD {
@@ -256,6 +273,13 @@ fn find_expressions(cache: &mut Cache, n: usize) {
 }
 
 fn main() {
+    for i in INPUTS {
+        assert_eq!(
+            i.vec.len(),
+            GOAL.len(),
+            "INPUTS and GOAL must have equal length"
+        );
+    }
     let mut cache: Cache = vec![vec![]];
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let mut no_results: bool = true;

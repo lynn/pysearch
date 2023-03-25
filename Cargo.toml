@@ -8,6 +8,9 @@ edition = "2021"
 [profile.dev]
 overflow-checks = false
 
+[features]
+simd = []
+
 # Doesn't seem to help much:
 # [profile.release]
 # lto = true
