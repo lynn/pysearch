@@ -7,9 +7,9 @@ use crate::{
     params::{Num, C_STYLE_MOD, GOAL},
 };
 
-pub type Vec = Array<Num, Ix1>;
+pub type Vector = Array<Num, Ix1>;
 
-pub fn divmod(left: &Vec, right: &Vec) -> Option<(Vec, Vec)> {
+pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if left
         .iter()
         .zip(right)
@@ -25,35 +25,35 @@ pub fn divmod(left: &Vec, right: &Vec) -> Option<(Vec, Vec)> {
     }
 }
 
-pub fn vec_or(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
     Array::from_shape_fn(
         GOAL.len(),
         |i| if left[i] == 0 { right[i] } else { left[i] },
     )
 }
 
-pub fn vec_eq(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_eq(left: &Vector, right: &Vector) -> Vector {
     Array::from_shape_fn(GOAL.len(), |i| (left[i] == right[i]) as Num)
 }
 
-pub fn vec_lt(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_lt(left: &Vector, right: &Vector) -> Vector {
     Array::from_shape_fn(GOAL.len(), |i| (left[i] < right[i]) as Num)
 }
 
-pub fn vec_le(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
     Array::from_shape_fn(GOAL.len(), |i| (left[i] <= right[i]) as Num)
 }
 
-pub fn vec_gcd(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
     Array::from_shape_fn(GOAL.len(), |i| gcd(left[i], right[i]))
 }
 
-pub fn vec_pow(left: &Vec, right: &Vec) -> Vec {
+pub fn vec_pow(left: &Vector, right: &Vector) -> Vector {
     let mut k = left.clone();
     k.zip_mut_with(right, |x, y| *x = x.pow(*y as u32));
     k
 }
 
-pub fn vec_in<R: RangeBounds<Num>>(vec: &Vec, bounds: R) -> bool {
+pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
     (0..GOAL.len()).all(|i| bounds.contains(&vec[i]))
 }

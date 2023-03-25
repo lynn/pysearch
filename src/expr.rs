@@ -1,37 +1,35 @@
 use std::{fmt::Display, ptr::NonNull};
 
-use crate::{
-    operator::Operator,
-    params::{Num, INPUTS},
-};
+use crate::{operator::Operator, params::INPUTS};
 
-pub type Mask = u32;
+pub type Literal = i32;
+pub type Mask = u8;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
+    pub literal: Literal,
     pub op: Operator,
-    pub literal: Num,
     pub var_mask: Mask,
 }
 
 impl Expr {
-    pub fn prec(&self) -> usize {
-        self.op as usize >> 8
+    pub fn prec(&self) -> u8 {
+        self.op as u8 >> 4
     }
 
-    pub fn variable(index: usize) -> Self {
+    pub fn variable(index: Literal) -> Self {
         Self {
             left: None,
             right: None,
             op: Operator::Literal,
-            literal: !(index as Num),
+            literal: !index,
             var_mask: 1 << index,
         }
     }
 
-    pub fn literal(value: Num) -> Self {
+    pub fn literal(value: Literal) -> Self {
         Self {
             left: None,
             right: None,

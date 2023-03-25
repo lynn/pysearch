@@ -4,10 +4,10 @@ pub mod operator;
 pub mod params;
 pub mod vec;
 
-use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask};
+use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask, Literal};
 use operator::Operator;
 use params::*;
-use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vec};
+use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
 use ndarray::Array;
 
@@ -17,8 +17,8 @@ use std::ptr::NonNull;
 use std::time::Instant;
 
 // cache[length][output] = highest-prec expression of that length yielding that output
-type CacheLevel = HashMap<Vec, Expr>;
-type Cache = HashMap<usize, CacheLevel>;
+type CacheLevel = HashMap<Vector, Expr>;
+type Cache = Vec<Vec<(Vector, Expr)>>;
 
 fn positive_integer_length(mut k: Num) -> usize {
     let mut l = 1;
@@ -29,7 +29,7 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
-fn save(level: &mut CacheLevel, output: Vec, expr: Expr) {
+fn save(level: &mut CacheLevel, output: Vector, expr: Expr) {
     let all_mask: Mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == all_mask {
         let mut mp: HashMap<Num, Num> = HashMap::new();
@@ -58,22 +58,22 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     let mut cn = CacheLevel::new();
     if n == 1 {
         for (i, input) in INPUTS.iter().enumerate() {
-            let vec: Vec = Array::from_iter(input.vec);
-            cn.insert(vec, Expr::variable(i));
+            let vec: Vector = Array::from_iter(input.vec);
+            cn.insert(vec, Expr::variable(i as Literal));
         }
     }
     for lit in LITERALS {
         if positive_integer_length(lit) == n {
-            let vec: Vec = Array::from_elem(GOAL.len(), lit);
-            cn.insert(vec, Expr::literal(lit));
+            let vec: Vector = Array::from_elem(GOAL.len(), lit);
+            cn.insert(vec, Expr::literal(lit as Literal));
         }
     }
 
     for k in 1..n {
-        for (or, er) in cache[&k].iter() {
+        for (or, er) in cache[k].iter() {
             // 1-byte operators
             if n >= k + 2 {
-                for (ol, el) in cache[&(n - k - 1)].iter() {
+                for (ol, el) in cache[n - k - 1].iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -136,7 +136,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             }
             // 2-byte operators
             if n >= k + 3 {
-                for (ol, el) in cache[&(n - k - 2)].iter() {
+                for (ol, el) in cache[n - k - 2].iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -196,7 +196,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             }
             // 3-byte operators
             if n >= k + 4 {
-                for (ol, el) in cache[&(n - k - 3)].iter() {
+                for (ol, el) in cache[n - k - 3].iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -221,7 +221,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
         }
     }
     if n >= 3 {
-        for (or, er) in cache[&(n - 2)].iter() {
+        for (or, er) in cache[n - 2].iter() {
             if er.op < Operator::Parens {
                 let erp: NonNull<Expr> = er.into();
                 cn.insert(or.clone(), Expr::parens(erp));
@@ -229,7 +229,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
         }
     }
     if n >= 2 {
-        for (or, er) in cache[&(n - 1)].iter() {
+        for (or, er) in cache[n - 1].iter() {
             let erp: NonNull<Expr> = er.into();
             if er.prec() >= 12 {
                 if USE_BIT_NEG {
@@ -241,22 +241,22 @@ fn find_expressions(cache: &mut Cache, n: usize) {
             }
         }
     }
-    cache.insert(n, cn);
+    cache.insert(n, cn.into_iter().collect());
 }
 
 fn main() {
-    let mut cache: Cache = HashMap::new();
+    let mut cache: Cache = vec![vec![]];
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let mut no_results: bool = true;
     let start = Instant::now();
     for n in 1..=MAX_LENGTH {
         println!("Finding length {n}...");
         find_expressions(&mut cache, n);
-        let count = cache[&n].len();
+        let count = cache[n].len();
         let time = start.elapsed();
         println!("Found {count} expressions in {time:?}.");
         let mut first: bool = true;
-        for (out, expr) in cache[&n].iter() {
+        for (out, expr) in cache[n].iter() {
             if GOAL.iter().enumerate().all(|(i, x)| mapping(*x) == out[i]) {
                 if first {
                     println!("\n--- Length {n} ---");
