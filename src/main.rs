@@ -21,7 +21,7 @@ const INPUTS: [Input; 1] = [Input {
     name: "x",
     vec: [0, 3, 5, 7, 9],
 }];
-const GOAL: [Num; 5] = [1, 1, 3, 2, 1];
+const GOAL: [Num; 5] = [10, 40, 60, 80, 100];
 
 const MAX_LENGTH: usize = 14;
 const LITERALS: [Num; 12] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];

@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 ndarray = "0.15.6"
+
+[profile.dev]
+overflow-checks = false
