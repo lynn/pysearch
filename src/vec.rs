@@ -16,6 +16,13 @@ impl Vector {
     pub fn from_slice(ns: &[Num]) -> Vector {
         Vector(ns.to_owned().into_boxed_slice())
     }
+
+    pub fn map(mut self, function: fn(Num) -> Num) -> Vector {
+        for x in &mut self.0.iter_mut() {
+            *x = function(*x)
+        }
+        self
+    }
 }
 
 impl Deref for Vector {

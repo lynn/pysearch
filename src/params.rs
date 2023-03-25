@@ -56,3 +56,6 @@ pub const C_STYLE_MOD: bool = false;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
+
+/// Check and print every intermediate expression that matches the goal. Slow.
+pub const SHOW_ALTERNATIVES: bool = false;

@@ -14,12 +14,14 @@ pub struct Vector(i32x8);
 impl Deref for Vector {
     type Target = i32x8;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl DerefMut for Vector {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -30,6 +32,7 @@ macro_rules! impl_op {
         impl std::ops::$trait<&Self> for Vector {
             type Output = Vector;
 
+            #[inline]
             fn $func(mut self, rhs: &Self) -> Self::Output {
                 self.0 $op rhs.0;
                 self
@@ -43,6 +46,7 @@ macro_rules! impl_unary {
         impl std::ops::$trait for Vector {
             type Output = Vector;
 
+            #[inline]
             fn $func(mut self) -> Self::Output {
                 self.0 = $op(self.0);
                 self
@@ -65,10 +69,12 @@ impl_unary!(Not, not, !);
 impl_unary!(Neg, neg, -);
 
 impl Vector {
+    #[inline]
     pub fn constant(n: Num) -> Vector {
         Vector(i32x8::splat(n))
     }
 
+    #[inline]
     pub fn from_slice(ns: &[Num]) -> Vector {
         let mut v = ns.to_owned();
         if v.len() > 8 {
@@ -81,17 +87,28 @@ impl Vector {
         }
         Vector(i32x8::from_slice(&v))
     }
+
+    #[inline]
+    pub fn map(self, function: fn(Num) -> Num) -> Self {
+        let mut a = self.to_array();
+        for x in &mut a {
+            *x = function(*x);
+        }
+        Self::from_slice(&a)
+    }
 }
 
 impl IntoIterator for Vector {
     type Item = Num;
     type IntoIter = std::array::IntoIter<Num, 8>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIterator::into_iter(self.0.to_array())
     }
 }
 
+#[inline]
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if (right.simd_eq(i32x8::splat(0))
         | (left.simd_eq(i32x8::splat(Num::MIN)) & right.simd_eq(i32x8::splat(-1))))
@@ -107,26 +124,31 @@ pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     }
 }
 
+#[inline]
 pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
     Vector(left.simd_eq(i32x8::splat(0)).select(**right, *left))
 }
 
+#[inline]
 pub fn vec_eq(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
     Vector(-left.simd_eq(right.0).to_int())
 }
 
+#[inline]
 pub fn vec_lt(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
     Vector(-left.simd_lt(right.0).to_int())
 }
 
+#[inline]
 pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
     Vector(-left.simd_le(right.0).to_int())
 }
 
+#[inline]
 pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
     let mut left = left.to_array();
     for (x, y) in left.iter_mut().zip(right.0.to_array()) {
@@ -135,6 +157,7 @@ pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
     Vector::from_slice(&left)
 }
 
+#[inline]
 pub fn vec_pow(left: &Vector, right: &Vector) -> Vector {
     let mut left = left.to_array();
     for (x, y) in left.iter_mut().zip(right.0.to_array()) {
@@ -143,6 +166,7 @@ pub fn vec_pow(left: &Vector, right: &Vector) -> Vector {
     Vector::from_slice(&left)
 }
 
+#[inline]
 pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
     (0..GOAL.len()).all(|i| bounds.contains(&vec[i]))
 }
