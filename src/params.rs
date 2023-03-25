@@ -1,19 +1,18 @@
 pub type Num = i32;
-pub type Nums = [Num; 8];
 
 pub struct Input {
     pub name: &'static str,
-    pub vec: Nums,
+    pub vec: &'static [Num],
 }
 
-pub const INPUTS: [Input; 2] = [
+pub const INPUTS: &[Input] = &[
     Input {
         name: "n",
-        vec: [100, 100, 100, 100, 53, 53, 53, 53],
+        vec: &[100, 100, 100, 100, 53, 53, 53, 53],
     },
     Input {
         name: "x",
-        vec: [100, 98, 2, 99, 53, 1, 20, 4],
+        vec: &[100, 98, 2, 99, 53, 1, 20, 4],
     },
 ];
 
@@ -28,10 +27,10 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
-pub const GOAL: Nums = [98, 96, 99, 97, 51, 52, 18, 2];
+pub const GOAL: &[Num] = &[98, 96, 99, 97, 51, 52, 18, 2];
 
 pub const MAX_LENGTH: usize = 14;
-pub const LITERALS: [Num; 12] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+pub const LITERALS: &[Num] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 pub const USE_OR: bool = true;
 pub const USE_LT: bool = true;
@@ -52,5 +51,8 @@ pub const USE_GCD: bool = false;
 pub const USE_NEG: bool = true;
 pub const USE_EXP: bool = true;
 
+/// Use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8).
 pub const C_STYLE_MOD: bool = false;
+
+/// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;

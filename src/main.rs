@@ -58,11 +58,11 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     let mut cn = CacheLevel::new();
     if n == 1 {
         for (i, input) in INPUTS.iter().enumerate() {
-            let vec: Vector = Array::from_iter(input.vec);
+            let vec: Vector = Array::from_iter(input.vec.to_owned());
             cn.insert(vec, Expr::variable(i as Literal));
         }
     }
-    for lit in LITERALS {
+    for &lit in LITERALS {
         if positive_integer_length(lit) == n {
             let vec: Vector = Array::from_elem(GOAL.len(), lit);
             cn.insert(vec, Expr::literal(lit as Literal));
