@@ -1,0 +1,66 @@
+use std::fmt::Display;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Operator {
+    Or = 0x300,
+    SpaceOr = 0x301,
+    OrSpace = 0x302,
+    // SpaceOrSpace = 0x303,
+    Lt = 0x500,
+    Le = 0x501,
+    // Gt = 0x502,
+    // Ge = 0x503,
+    // Eq = 0x504,
+    // Ne = 0x505,
+    BitOr = 0x600,
+    BitXor = 0x700,
+    BitAnd = 0x800,
+    BitShl = 0x900,
+    BitShr = 0x901,
+    Add = 0xA00,
+    Sub = 0xA01,
+    Mul = 0xB00,
+    Mod = 0xB01,
+    Div1 = 0xB02,
+    Div2 = 0xB03,
+    Gcd = 0xB04,
+    Neg = 0xC00,
+    BitNeg = 0xC01,
+    Exp = 0xD00,
+    Parens = 0xFE00,
+    Literal = 0xFF00,
+}
+
+impl Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operator::Or => write!(f, "or"),
+            Operator::SpaceOr => write!(f, " or"),
+            Operator::OrSpace => write!(f, "or "),
+            // Operator::SpaceOrSpace => write!(f, " or "),
+            Operator::Lt => write!(f, "<"),
+            Operator::Le => write!(f, "<="),
+            // Operator::Gt => write!(f, ">"),
+            // Operator::Ge => write!(f, ">="),
+            // Operator::Eq => write!(f, "=="),
+            // Operator::Ne => write!(f, "!="),
+            Operator::BitOr => write!(f, "|"),
+            Operator::BitXor => write!(f, "^"),
+            Operator::BitAnd => write!(f, "&"),
+            Operator::BitShl => write!(f, "<<"),
+            Operator::BitShr => write!(f, ">>"),
+            Operator::Add => write!(f, "+"),
+            Operator::Sub => write!(f, "-"),
+            Operator::Mul => write!(f, "*"),
+            Operator::Mod => write!(f, "%"),
+            Operator::Div1 => write!(f, "/"),
+            Operator::Div2 => write!(f, "//"),
+            Operator::Gcd => write!(f, "∨"),
+            Operator::Neg => write!(f, "-"),
+            Operator::BitNeg => write!(f, "~"),
+            Operator::Exp => write!(f, "**"),
+            Operator::Parens => write!(f, "("),
+            Operator::Literal => write!(f, ""),
+        }
+    }
+}

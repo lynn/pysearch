@@ -10,3 +10,7 @@ ndarray = "0.15.6"
 
 [profile.dev]
 overflow-checks = false
+
+# Doesn't seem to help much:
+# [profile.release]
+# lto = true
