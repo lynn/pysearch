@@ -71,10 +71,10 @@ fn find_expressions(cache: &Cache, n: usize) {
     }
 
     for k in 1..n {
-        for (or, er) in &*cache[&k].borrow() {
+        for (or, er) in cache[&k].borrow().iter() {
             // 1-byte operators
             if n >= k + 2 {
-                for (ol, el) in &*cache[&(n - k - 1)].borrow() {
+                for (ol, el) in cache[&(n - k - 1)].borrow().iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -125,7 +125,7 @@ fn find_expressions(cache: &Cache, n: usize) {
             }
             // 2-byte operators
             if n >= k + 3 {
-                for (ol, el) in &*cache[&(n - k - 2)].borrow() {
+                for (ol, el) in cache[&(n - k - 2)].borrow().iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -169,7 +169,7 @@ fn find_expressions(cache: &Cache, n: usize) {
             }
             // 3-byte operators
             if n >= k + 4 {
-                for (ol, el) in &*cache[&(n - k - 3)].borrow() {
+                for (ol, el) in cache[&(n - k - 3)].borrow().iter() {
                     let elp: NonNull<Expr> = el.into();
                     let erp: NonNull<Expr> = er.into();
                     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
@@ -190,25 +190,15 @@ fn find_expressions(cache: &Cache, n: usize) {
         }
     }
     if n >= 3 {
-        for (or, er) in &*cache[&(n - 2)].borrow() {
-            let erp: NonNull<Expr> = er.into();
-            if er.op >= Operator::Parens {
-                continue;
+        for (or, er) in cache[&(n - 2)].borrow().iter() {
+            if er.op < Operator::Parens {
+                let erp: NonNull<Expr> = er.into();
+                cn.borrow_mut().insert(or.clone(), Expr::parens(erp));
             }
-            cn.borrow_mut().insert(
-                or.clone(),
-                Expr {
-                    left: None,
-                    right: Some(erp),
-                    op: Operator::Parens,
-                    literal: 0,
-                    var_mask: er.var_mask,
-                },
-            );
         }
     }
     if n >= 2 {
-        for (or, er) in &*cache[&(n - 1)].borrow() {
+        for (or, er) in cache[&(n - 1)].borrow().iter() {
             let erp: NonNull<Expr> = er.into();
             if er.prec() >= 12 {
                 if USE_BIT_NEG {
@@ -235,7 +225,7 @@ fn main() {
         let time = start.elapsed();
         println!("Found {count} expressions in {time:?}.");
         let mut first: bool = true;
-        for (out, expr) in &*cache[&n].borrow() {
+        for (out, expr) in cache[&n].borrow().iter() {
             if GOAL.iter().enumerate().all(|(i, x)| mapping(*x) == out[i]) {
                 if first {
                     println!("\n--- Length {n} ---");

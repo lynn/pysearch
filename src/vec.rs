@@ -49,7 +49,9 @@ pub fn vec_gcd(left: &Vec, right: &Vec) -> Vec {
 }
 
 pub fn vec_pow(left: &Vec, right: &Vec) -> Vec {
-    Array::from_shape_fn(GOAL.len(), |i| left[i].pow(right[i] as u32))
+    let mut k = left.clone();
+    k.zip_mut_with(right, |x, y| *x = x.pow(*y as u32));
+    k
 }
 
 pub fn vec_in<R: RangeBounds<Num>>(vec: &Vec, bounds: R) -> bool {

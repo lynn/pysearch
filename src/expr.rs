@@ -60,6 +60,16 @@ impl Expr {
             var_mask: unsafe { *er.as_ptr() }.var_mask,
         }
     }
+
+    pub fn parens(er: NonNull<Expr>) -> Self {
+        Self {
+            left: None,
+            right: Some(er),
+            op: Operator::Parens,
+            literal: 0,
+            var_mask: unsafe { *er.as_ptr() }.var_mask,
+        }
+    }
 }
 
 impl Display for Expr {

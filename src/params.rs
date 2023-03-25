@@ -1,14 +1,21 @@
 pub type Num = i32;
+pub type Nums = [Num; 8];
 
 pub struct Input {
     pub name: &'static str,
-    pub vec: [Num; 5],
+    pub vec: Nums,
 }
 
-pub const INPUTS: [Input; 1] = [Input {
-    name: "x",
-    vec: [1, 22, 333, 4444, 55555],
-}];
+pub const INPUTS: [Input; 2] = [
+    Input {
+        name: "n",
+        vec: [100, 100, 100, 100, 53, 53, 53, 53],
+    },
+    Input {
+        name: "x",
+        vec: [100, 98, 2, 99, 53, 1, 20, 4],
+    },
+];
 
 /// This function gets applied to the output when comparing to GOAL.
 ///
@@ -21,12 +28,12 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
-pub const GOAL: [Num; 5] = [1, 20, 300, 4000, 50000];
+pub const GOAL: Nums = [98, 96, 99, 97, 51, 52, 18, 2];
 
 pub const MAX_LENGTH: usize = 14;
 pub const LITERALS: [Num; 12] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-pub const USE_OR: bool = false;
+pub const USE_OR: bool = true;
 pub const USE_LT: bool = true;
 pub const USE_LE: bool = true;
 pub const USE_BIT_OR: bool = true;
