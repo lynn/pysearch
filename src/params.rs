@@ -5,16 +5,10 @@ pub struct Input {
     pub vec: &'static [Num],
 }
 
-pub const INPUTS: &[Input] = &[
-    Input {
-        name: "n",
-        vec: &[100, 100, 100, 100, 53, 53, 53, 53],
-    },
-    Input {
-        name: "x",
-        vec: &[100, 98, 2, 99, 53, 1, 20, 4],
-    },
-];
+pub const INPUTS: &[Input] = &[Input {
+    name: "n",
+    vec: &['E' as i32, 'W' as i32, 'N' as i32, 'S' as i32],
+}];
 
 /// This function gets applied to the output when comparing to GOAL.
 ///
@@ -27,10 +21,13 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
-pub const GOAL: &[Num] = &[98, 96, 99, 97, 51, 52, 18, 2];
+pub const GOAL: &[Num] = &[1, -1, 0, 0];
 
 pub const MAX_LENGTH: usize = 14;
-pub const LITERALS: &[Num] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+pub const LITERALS: &[Num] = &[
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+];
 
 pub const USE_OR: bool = true;
 pub const USE_LT: bool = true;
@@ -56,6 +53,3 @@ pub const C_STYLE_MOD: bool = false;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
-
-/// Check and print every intermediate expression that matches the goal. Slow.
-pub const SHOW_ALTERNATIVES: bool = false;

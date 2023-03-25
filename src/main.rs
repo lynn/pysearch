@@ -33,10 +33,6 @@ fn positive_integer_length(mut k: Num) -> usize {
 }
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr) {
-    if SHOW_ALTERNATIVES && output.clone().map(mapping) == Vector::from_slice(GOAL) {
-        println!("{expr}");
-    }
-
     let all_mask: Mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == all_mask {
         let mut mp: HashMap<Num, Num> = HashMap::new();
@@ -47,6 +43,10 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr) {
                 }
             }
         }
+    }
+
+    if output.clone().map(mapping) == Vector::from_slice(GOAL) {
+        println!("{expr}");
     }
 
     match level.entry(output) {
@@ -284,31 +284,20 @@ fn main() {
             "INPUTS and GOAL must have equal length"
         );
     }
-    let goal_vec = Vector::from_slice(GOAL);
     let mut cache: Cache = vec![vec![]];
+    let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
-    let mut no_results: bool = true;
     let start = Instant::now();
     for n in 1..=MAX_LENGTH {
         println!("Finding length {n}...");
+        let layer_start = Instant::now();
         find_expressions(&mut cache, n);
         let count = cache[n].len();
-        let time = start.elapsed();
-        println!("Found {count} expressions in {time:?}.");
-        let mut first: bool = true;
-        for (output, expr) in cache[n].iter() {
-            if output.clone().map(mapping) == goal_vec {
-                if first {
-                    println!("\n--- Length {n} ---");
-                    first = false;
-                    no_results = false;
-                }
-                println!("{expr}");
-            }
-        }
-    }
-    if no_results {
-        println!("\nNo results found.");
+        total_count += count;
+        let time = layer_start.elapsed();
+        println!("Explored {count} expressions in {time:?}");
+        let total_time = start.elapsed();
+        println!("Total: {total_count} expressions in {total_time:?}\n");
     }
     println!();
 }
