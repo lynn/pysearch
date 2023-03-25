@@ -114,17 +114,17 @@ pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
 
 pub fn vec_eq(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
-    Vector(left.simd_eq(right.0).to_int())
+    Vector(-left.simd_eq(right.0).to_int())
 }
 
 pub fn vec_lt(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
-    Vector(left.simd_lt(right.0).to_int())
+    Vector(-left.simd_lt(right.0).to_int())
 }
 
 pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
     let left = left.clone();
-    Vector(left.simd_le(right.0).to_int())
+    Vector(-left.simd_le(right.0).to_int())
 }
 
 pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
