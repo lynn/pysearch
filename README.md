@@ -13,6 +13,7 @@ If your input/goal vectors have length ≤8, you can try `cargo run --release --
 Let's golf this Python code!
 
 ```py
+# 139 bytes
 x = y = 0
 for c in input():
     if c == 'E': x += 1
@@ -24,7 +25,10 @@ for c in input():
 
 It reads a string of compass direction letters and prints coordinates walking across a grid. Let's say the rules guarantee that this string will only consist of `EWNS` and no other letters.
 
+Applying some standard golf tricks, we get:
+
 ```py
+# 75 bytes
 x=y=0
 for c in input():x+=(c=='E')-(c=='W');y+=(c=='N')-(c=='S');print(x,y)
 ```
@@ -32,6 +36,7 @@ for c in input():x+=(c=='E')-(c=='W');y+=(c=='N')-(c=='S');print(x,y)
 Let's introduce numbers we can do math on. This makes the code longer for now, but it'll pay off:
 
 ```py
+# 80 bytes...
 x=y=0
 for n in map(ord,input()):x+=(n==69)-(n==87);y+=(n==78)-(n==83);print(x,y)
 ```
@@ -71,6 +76,7 @@ So we can just write `x+=n%5-3`.
 We do the same for `y`, with `GOAL = [0, 0, 1, -1]`, and it finds `1-n//2%3`. Now our code is a lot shorter.
 
 ```py
+# 63 bytes 🎉
 x=y=0
 for n in map(ord,input()):x+=n%5-3;y+=1-n//2%3;print(x,y)
 ```
