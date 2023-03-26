@@ -11,6 +11,9 @@ overflow-checks = false
 [features]
 simd = []
 
+[dependencies]
+rayon = "1.7.0"
+
 # Doesn't seem to help much:
 # [profile.release]
 # lto = true
