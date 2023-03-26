@@ -34,7 +34,13 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
-fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize) {
+fn save(
+    level: &mut CacheLevel,
+    output: Vector,
+    expr: Expr,
+    n: usize,
+    shorter: &HashMap<Vector, u8>,
+) {
     let all_mask: Mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == all_mask {
         let mut mp: HashMap<Num, Num> = HashMap::new();
@@ -56,6 +62,12 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize) {
         return;
     }
 
+    if let Some(prec) = shorter.get(&output) {
+        if *prec >= expr.prec() {
+            return;
+        }
+    }
+
     insert_to_level(level, output, expr);
 }
 
@@ -72,8 +84,7 @@ fn insert_to_level(level: &mut CacheLevel, output: Vector, expr: Expr) {
     }
 }
 
-fn find_expressions(mut_cache: &mut Cache, n: usize) {
-    let cache = &mut_cache;
+fn find_expressions(cache: &Cache, n: usize, shorter: &HashMap<Vector, u8>) -> Vec<(Vector, Expr)> {
     let mut cn = (1..n)
         .into_par_iter()
         .flat_map(|k| {
@@ -97,6 +108,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 vec_lt(ol, or),
                                 Expr::bin(elp, erp, Operator::Lt, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if USE_BIT_OR && el.prec() >= 6 && er.prec() > 6 {
@@ -105,6 +117,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 ol.clone() | or,
                                 Expr::bin(elp, erp, Operator::BitOr, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if USE_BIT_XOR && el.prec() >= 7 && er.prec() > 7 {
@@ -113,6 +126,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 ol.clone() ^ or,
                                 Expr::bin(elp, erp, Operator::BitXor, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if USE_BIT_AND && el.prec() >= 8 && er.prec() > 8 {
@@ -121,6 +135,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 ol.clone() & or,
                                 Expr::bin(elp, erp, Operator::BitAnd, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if el.prec() >= 10 && er.prec() > 10 {
@@ -130,6 +145,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     ol.clone() + or,
                                     Expr::bin(elp, erp, Operator::Add, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                             if USE_SUB {
@@ -138,6 +154,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     ol.clone() - or,
                                     Expr::bin(elp, erp, Operator::Sub, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                         }
@@ -148,6 +165,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     ol.clone() * or,
                                     Expr::bin(elp, erp, Operator::Mul, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                             if let Some((div, modulo)) = divmod(ol, or) {
@@ -157,6 +175,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                         modulo,
                                         Expr::bin(elp, erp, Operator::Mod, mask),
                                         n,
+                                        shorter,
                                     );
                                 }
                                 if USE_DIV1 {
@@ -165,6 +184,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                         div,
                                         Expr::bin(elp, erp, Operator::Div1, mask),
                                         n,
+                                        shorter,
                                     );
                                 }
                             }
@@ -174,6 +194,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     vec_gcd(ol, or),
                                     Expr::bin(elp, erp, Operator::Gcd, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                         }
@@ -202,6 +223,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 vec_or(ol, or),
                                 Expr::bin(elp, erp, Operator::Or, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if USE_LE && el.prec() >= 5 && er.prec() > 5 {
@@ -210,6 +232,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 vec_le(ol, or),
                                 Expr::bin(elp, erp, Operator::Le, mask),
                                 n,
+                                shorter,
                             );
                         }
                         if el.prec() > 9 && er.prec() >= 9 && vec_in(or, 0..=31) {
@@ -219,6 +242,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     ol.clone() << or,
                                     Expr::bin(elp, erp, Operator::BitShl, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                             if USE_BIT_SHR {
@@ -227,6 +251,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     ol.clone() >> or,
                                     Expr::bin(elp, erp, Operator::BitShr, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                         }
@@ -238,6 +263,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                         div,
                                         Expr::bin(elp, erp, Operator::Div2, mask),
                                         n,
+                                        shorter,
                                     );
                                 }
                             }
@@ -248,6 +274,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 vec_pow(ol, or),
                                 Expr::bin(elp, erp, Operator::Exp, mask),
                                 n,
+                                shorter,
                             );
                         }
                     }
@@ -272,10 +299,17 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                     z.clone(),
                                     Expr::bin(elp, erp, Operator::SpaceOr, mask),
                                     n,
+                                    shorter,
                                 );
                             }
                             if USE_OR && ok_before_keyword(el) && !ok_after_keyword(er) {
-                                save(&mut cn, z, Expr::bin(elp, erp, Operator::OrSpace, mask), n);
+                                save(
+                                    &mut cn,
+                                    z,
+                                    Expr::bin(elp, erp, Operator::OrSpace, mask),
+                                    n,
+                                    shorter,
+                                );
                             }
                         }
                     }
@@ -304,10 +338,22 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                 let erp: NonNull<Expr> = er.into();
                 if er.prec() >= 12 {
                     if USE_BIT_NEG {
-                        save(&mut cn, !or.clone(), Expr::unary(erp, Operator::BitNeg), n);
+                        save(
+                            &mut cn,
+                            !or.clone(),
+                            Expr::unary(erp, Operator::BitNeg),
+                            n,
+                            shorter,
+                        );
                     }
                     if USE_NEG {
-                        save(&mut cn, -or.clone(), Expr::unary(erp, Operator::Neg), n);
+                        save(
+                            &mut cn,
+                            -or.clone(),
+                            Expr::unary(erp, Operator::Neg),
+                            n,
+                            shorter,
+                        );
                     }
                 }
             }
@@ -339,7 +385,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
         }
     }
 
-    mut_cache.push(cn.into_par_iter().collect());
+    cn.into_par_iter().collect()
 }
 
 fn main() {
@@ -350,6 +396,7 @@ fn main() {
             "INPUTS and GOAL must have equal length"
         );
     }
+    let mut shorter: HashMap<Vector, u8> = HashMap::new();
     let mut cache: Cache = vec![vec![]];
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
@@ -357,7 +404,13 @@ fn main() {
     for n in 1..=MAX_LENGTH {
         println!("Finding length {n}...");
         let layer_start = Instant::now();
-        find_expressions(&mut cache, n);
+        let layer = find_expressions(&mut cache, n, &mut shorter);
+        if n <= 10 {
+            for (v, e) in &layer {
+                shorter.insert(v.clone(), e.prec());
+            }
+        }
+        cache.push(layer);
         let count = cache[n].len();
         total_count += count;
         let time = layer_start.elapsed();
