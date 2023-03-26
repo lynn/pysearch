@@ -13,6 +13,8 @@ pub struct Expr {
     pub op: Operator,
     pub var_mask: Mask,
 }
+unsafe impl Send for Expr {}
+unsafe impl Sync for Expr {}
 
 impl Expr {
     pub fn prec(&self) -> u8 {
