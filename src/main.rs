@@ -315,7 +315,10 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
         }))
         .reduce(
             || CacheLevel::new(),
-            |mut level, level2| {
+            |mut level, mut level2| {
+                if level.len() < level2.len() {
+                    std::mem::swap(&mut level, &mut level2);
+                }
                 for (output, expr) in level2 {
                     insert_to_level(&mut level, output, expr);
                 }
