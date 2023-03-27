@@ -47,7 +47,7 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize) {
         }
     }
 
-    if output.clone().map(mapping) == Vector::from_slice(GOAL) {
+    if match_goal(&output) {
         println!("{expr}");
         return;
     }
