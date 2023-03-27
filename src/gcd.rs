@@ -19,7 +19,9 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-pub fn gcd(mut u: i32, mut v: i32) -> i32 {
+use crate::params::Num;
+
+pub fn gcd(mut u: Num, mut v: Num) -> Num {
     use std::cmp::min;
     use std::mem::swap;
 
