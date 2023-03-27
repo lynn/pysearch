@@ -232,7 +232,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                                 cache,
                             );
                         }
-                        if el.prec() > 9 && er.prec() >= 9 && vec_in(or, 0..=31) {
+                        if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..=31) {
                             if USE_BIT_SHL {
                                 save(
                                     &mut cn,
