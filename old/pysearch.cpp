@@ -277,7 +277,7 @@ void find_expressions(int n) {
           z = 0*oL; z[oL <= oR] = 1;
           cache_if_better(cn, z, Expr{&eL, &eR, Operator::Leq, 0, mask});
         }
-        if (eL.prec() > 9 && eR.prec() >= 9 && (oR >= 0).min() && (oR <= 31).min()) {
+        if (eL.prec() >= 9 && eR.prec() > 9 && (oR >= 0).min() && (oR <= 31).min()) {
           if (Use_BitShl) cache_if_better(cn, oL << oR, Expr{&eL, &eR, Operator::BitShl, 0, mask});
           if (Use_BitShr) cache_if_better(cn, oL >> oR, Expr{&eL, &eR, Operator::BitShr, 0, mask});
         }
