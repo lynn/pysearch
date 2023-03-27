@@ -1,3 +1,5 @@
+use crate::vec::Vector;
+
 pub type Num = i32;
 
 pub struct Input {
@@ -19,6 +21,10 @@ pub const INPUTS: &[Input] = &[Input {
 /// and use only 0/1 in the GOAL.
 pub fn mapping(n: Num) -> Num {
     n
+}
+
+pub fn match_goal(output: &Vector) -> bool {
+    output.clone().map(mapping) == Vector::from_slice(GOAL)
 }
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
