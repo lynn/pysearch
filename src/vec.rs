@@ -6,15 +6,15 @@ use crate::{
 };
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Vector(Box<[Num]>);
+pub struct Vector([Num; GOAL.len()]);
 
 impl Vector {
     pub fn constant(n: Num) -> Vector {
-        Vector(vec![n; GOAL.len()].into_boxed_slice())
+        Vector([n; GOAL.len()])
     }
 
     pub fn from_slice(ns: &[Num]) -> Vector {
-        Vector(ns.to_owned().into_boxed_slice())
+        Vector(ns.try_into().expect("slice have same length"))
     }
 
     pub fn map(mut self, function: fn(Num) -> Num) -> Vector {
@@ -26,7 +26,7 @@ impl Vector {
 }
 
 impl Deref for Vector {
-    type Target = Box<[Num]>;
+    type Target = [Num; GOAL.len()];
 
     fn deref(&self) -> &Self::Target {
         &self.0
