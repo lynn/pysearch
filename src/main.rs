@@ -86,9 +86,6 @@ fn find_binary_expressions(
     (or, er): (&Vector, &Expr),
 ) {
     // 1-byte operators
-    if n < k + 2 {
-        return;
-    }
     for (ol, el) in &cache[n - k - 1] {
         if er.is_literal() && el.is_literal() {
             continue;
@@ -351,7 +348,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
     use rayon::prelude::*;
 
     let cache = &mut_cache;
-    let mut cn = (1..n)
+    let mut cn = (1..n - 1)
         .into_par_iter()
         .flat_map(|k| {
             cache[k].par_iter().map(move |r| {
@@ -403,7 +400,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     if n >= 2 {
         find_unary_expressions(&mut cn, cache, n);
     }
-    for k in 1..n {
+    for k in 1..n - 1 {
         for r in &cache[k] {
             find_binary_expressions(&mut cn, cache, n, k, r);
         }
