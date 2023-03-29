@@ -8,6 +8,8 @@ Edit the search parameters at the top of `src/params.rs`, then run `cargo run --
 
 If your input/goal vectors have length ≤8, you can try `cargo run --release --features simd` (this should be faster).
 
+You can also pass `--features rayon` to enable multithreading, it should be faster but will use more memory.
+
 ## Example
 
 Let's golf this Python code!
