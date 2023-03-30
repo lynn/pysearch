@@ -1,10 +1,13 @@
-#![feature(portable_simd)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
+
 pub mod expr;
 pub mod gcd;
 pub mod operator;
+
+#[path = "params.rs"]
 pub mod params;
 
-#[cfg_attr(feature = "simd", path = "vec_simd.rs")]
+#[cfg_attr(all(feature = "simd", feature = "portable_simd"), path = "vec_simd.rs")]
 #[cfg_attr(not(feature = "simd"), path = "vec.rs")]
 pub mod vec;
 
@@ -30,6 +33,15 @@ fn positive_integer_length(mut k: Num) -> usize {
         l += 1;
     }
     l
+}
+
+#[cfg(feature = "rayon")]
+fn unit_if(b: bool) -> Option<()> {
+    if b {
+        Some(())
+    } else {
+        None
+    }
 }
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
@@ -357,17 +369,12 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                 cn
             })
         })
-        .chain(
-            (n >= 3 && n < MAX_LENGTH)
-                .then_some(())
-                .into_par_iter()
-                .map(|()| {
-                    let mut cn = CacheLevel::new();
-                    find_parens_expressions(&mut cn, cache, n);
-                    cn
-                }),
-        )
-        .chain((n >= 2).then_some(()).into_par_iter().map(|()| {
+        .chain(unit_if(n >= 3 && n < MAX_LENGTH).into_par_iter().map(|()| {
+            let mut cn = CacheLevel::new();
+            find_parens_expressions(&mut cn, cache, n);
+            cn
+        }))
+        .chain(unit_if(n >= 2).into_par_iter().map(|()| {
             let mut cn = CacheLevel::new();
             find_unary_expressions(&mut cn, cache, n);
             cn
