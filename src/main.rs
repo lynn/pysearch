@@ -17,8 +17,7 @@ use params::*;
 
 use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use std::ptr::NonNull;
 use std::time::Instant;
 
