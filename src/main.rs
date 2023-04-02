@@ -394,6 +394,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
 
     find_variables_and_literals(&mut cn, n);
 
+    cn.shrink_to_fit();
     mut_cache.push(cn);
 }
 
@@ -413,6 +414,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
         }
     }
 
+    cn.shrink_to_fit();
     cache.push(cn);
 }
 
