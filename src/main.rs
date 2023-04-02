@@ -256,11 +256,9 @@ fn find_binary_expressions(
                 );
             }
         }
-        if el.prec() >= 11 && er.prec() > 11 {
+        if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
             if let Some((div, _)) = divmod(ol, or) {
-                if USE_DIV2 {
-                    save(cn, div, Expr::bin(elp, erp, Operator::Div2, mask), n, cache);
-                }
+                save(cn, div, Expr::bin(elp, erp, Operator::Div2, mask), n, cache);
             }
         }
         if USE_EXP && el.prec() > 13 && er.prec() >= 13 && vec_in(or, 0..=6) {
