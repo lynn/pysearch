@@ -351,6 +351,13 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
             cn.insert(vec, Expr::literal(lit as Literal));
         }
     }
+    if MAX_LITERAL > 0 {
+        let m = (10 as Num).pow(n as u32 - 1);
+        for lit in m..=(m * 10 - 1).min(MAX_LITERAL) {
+            let vec: Vector = Vector::constant(lit);
+            cn.insert(vec, Expr::literal(lit as Literal));
+        }
+    }
 }
 
 #[cfg(feature = "rayon")]
