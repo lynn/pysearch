@@ -17,8 +17,7 @@ use params::*;
 
 use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use std::ptr::NonNull;
 use std::time::Instant;
 
@@ -362,13 +361,21 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
 
 #[cfg(feature = "rayon")]
 fn find_expressions(mut_cache: &mut Cache, n: usize) {
-    use rayon::prelude::*;
+    use rayon::{iter::Either, prelude::*};
 
     let cache = &mut_cache;
     let mut cn = (1..n - 1)
         .into_par_iter()
         .flat_map(|k| {
-            cache[k].par_iter().map(move |r| {
+            // Use `par_bridge` for more parallelism when there're not enough
+            // items in the map.
+            // https://github.com/rust-lang/hashbrown/issues/383
+            if k <= 2 {
+                Either::Left(cache[k].iter().par_bridge())
+            } else {
+                Either::Right(cache[k].par_iter())
+            }
+            .map(move |r| {
                 let mut cn = CacheLevel::new();
                 find_binary_expressions(&mut cn, cache, n, k, r);
                 cn
