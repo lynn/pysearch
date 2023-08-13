@@ -346,15 +346,14 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     }
     for &lit in LITERALS {
         if positive_integer_length(lit) == n {
-            let vec: Vector = Vector::constant(lit);
-            cn.insert(vec, Expr::literal(lit as Literal));
+            cn.insert(Vector::constant(lit), Expr::literal(lit as Literal));
         }
     }
     if MAX_LITERAL > 0 {
-        let m = (10 as Num).pow(n as u32 - 1);
-        for lit in m..=(m * 10 - 1).min(MAX_LITERAL) {
-            let vec: Vector = Vector::constant(lit);
-            cn.insert(vec, Expr::literal(lit as Literal));
+        if let Some(m) = (10 as Num).checked_pow(n as u32 - 1) {
+            for lit in m..=m.saturating_mul(9).saturating_add(m-1).min(MAX_LITERAL) {
+                cn.insert(Vector::constant(lit), Expr::literal(lit as Literal));
+            }
         }
     }
 }
