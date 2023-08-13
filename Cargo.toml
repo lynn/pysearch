@@ -14,7 +14,7 @@ rayon = ["dep:rayon", "hashbrown/rayon"]
 
 [dependencies]
 rayon = { version = "1.7.0", optional = true }
-hashbrown = "0.13.2"
+hashbrown = "0.14.0"
 
 # Doesn't seem to help much:
 # [profile.release]
