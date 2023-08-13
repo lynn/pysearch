@@ -80,13 +80,13 @@ impl_op!(BitXor, bitxor, ^=);
 impl_op!(Shl, shl, <<=);
 impl_op!(Shr, shr, >>=);
 impl_unary!(Not, not, !);
-impl_unary!(Neg, neg, -);
+impl_unary!(Neg, neg, (|x|0-x));
 
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if left
         .iter()
         .zip(right.iter())
-        .any(|(&x, &y)| y == 0 || (x, y) == (Num::MIN, -1))
+        .any(|(&x, &y)| y == 0 || (x, y) == (Num::MIN, !0))
     {
         None
     } else if C_STYLE_MOD {
