@@ -56,7 +56,7 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
         }
     }
 
-    if match_goal(&output) {
+    if match_goal(&output, &expr) {
         println!("{expr}");
         return;
     }

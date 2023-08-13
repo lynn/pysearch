@@ -1,4 +1,4 @@
-use crate::vec::Vector;
+use crate::{expr::Expr, vec::Vector};
 
 pub type Num = i32;
 
@@ -23,7 +23,7 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
-pub fn match_goal(output: &Vector) -> bool {
+pub fn match_goal(output: &Vector, _expr: &Expr) -> bool {
     output.clone().map(mapping) == Vector::from_slice(GOAL)
 }
 
