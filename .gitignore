@@ -35,3 +35,6 @@
 # Added by cargo
 
 /target
+
+# custom params
+params_*.rs
