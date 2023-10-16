@@ -153,7 +153,7 @@ void print_expression(const Expr *expr) {
 
 struct VecHasher {
   std::size_t operator()(const Vec &v) const {
-    int h = 0;
+    std::size_t h = 0;
     for (const auto x : v)
       h ^= x + 0x9e3779b9 + (h << 6) + (x >> 2);
     return h;
