@@ -140,14 +140,14 @@ pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
     left
 }
 
-pub fn vec_pow(left: &Vector, right: &Vector) -> Vector {
+pub fn vec_pow(left: &Vector, right: &Vector) -> Option<Vector> {
     let mut left = left.clone();
     for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = (*x).pow(*y as u32);
+        *x = (*x).checked_pow((*y).try_into().ok()?)?;
     }
-    left
+    Some(left)
 }
 
 pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
-    (0..GOAL.len()).all(|i| bounds.contains(&vec[i]))
+    vec.iter().all(|x| bounds.contains(x))
 }

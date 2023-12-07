@@ -250,7 +250,7 @@ fn find_2_byte_operators(
             cache,
         );
     }
-    if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..=31) {
+    if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..Num::BITS as Num) {
         if USE_BIT_SHL {
             save(
                 cn,
@@ -275,14 +275,16 @@ fn find_2_byte_operators(
             save(cn, div, Expr::bin(elp, erp, Operator::Div2, mask), n, cache);
         }
     }
-    if USE_EXP && el.prec() > 13 && er.prec() >= 13 && vec_in(or, 0..=6) {
-        save(
-            cn,
-            vec_pow(ol, or),
-            Expr::bin(elp, erp, Operator::Exp, mask),
-            n,
-            cache,
-        );
+    if USE_EXP && el.prec() > 13 && er.prec() >= 13 {
+        if let Some(output) = vec_pow(ol, or) {
+            save(
+                cn,
+                output,
+                Expr::bin(elp, erp, Operator::Exp, mask),
+                n,
+                cache,
+            );
+        }
     }
 }
 
