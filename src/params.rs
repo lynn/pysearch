@@ -62,3 +62,6 @@ pub const C_STYLE_MOD: bool = false;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
+
+/// Controls whether all declared variables should be always used.
+pub const USE_ALL_VARS: bool = true;
