@@ -34,8 +34,8 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
-fn can_use_required_vars(mask: u8, expr_length: usize) -> bool {
-    !USE_ALL_VARS || expr_length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
+fn can_use_required_vars(mask: u8, length: usize) -> bool {
+    !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
 }
 
 #[cfg(feature = "rayon")]
@@ -48,7 +48,9 @@ fn unit_if(b: bool) -> Option<()> {
 }
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
-    if (expr.var_mask == ALL_MASK || !USE_ALL_VARS) && match_goal(&output, &expr) {
+    const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
+    
+    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&output, &expr) {
         println!("{expr}");
         return;
     }
@@ -57,7 +59,6 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
         return;
     }
     
-    const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
