@@ -34,6 +34,10 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
+fn can_use_required_vars(mask: u8, length: usize) -> bool {
+    !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
+}
+
 #[cfg(feature = "rayon")]
 fn unit_if(b: bool) -> Option<()> {
     if b {
@@ -45,6 +49,16 @@ fn unit_if(b: bool) -> Option<()> {
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
+    
+    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&output, &expr) {
+        println!("{expr}");
+        return;
+    }
+
+    if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
+        return;
+    }
+    
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
@@ -54,15 +68,6 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
                 }
             }
         }
-    }
-
-    if match_goal(&output, &expr) {
-        println!("{expr}");
-        return;
-    }
-
-    if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
-        return;
     }
 
     if n <= MAX_LENGTH - 2 {
@@ -121,6 +126,9 @@ fn find_1_byte_operators(
         return;
     }
     let mask = el.var_mask | er.var_mask;
+    if !can_use_required_vars(mask, n) {
+        return;
+    }
     // For commutative operators, choose an arbitrary order for the two operands based on memory
     // address.
     let use_commutative_op = |prec| el.prec() >= prec && er.prec() >= prec && elp <= erp;
@@ -232,6 +240,9 @@ fn find_2_byte_operators(
         return;
     }
     let mask = el.var_mask | er.var_mask;
+    if !can_use_required_vars(mask, n) {
+        return;
+    }
     if USE_OR && el.prec() >= 3 && er.prec() > 3 && ok_before_keyword(el) && ok_after_keyword(er) {
         save(
             cn,
@@ -304,6 +315,9 @@ fn find_3_byte_operators(
         return;
     }
     let mask = el.var_mask | er.var_mask;
+    if !can_use_required_vars(mask, n) {
+        return;
+    }
     if el.prec() >= 3 && er.prec() > 3 {
         let z = vec_or(ol, or);
         if USE_OR && !ok_before_keyword(el) && ok_after_keyword(er) {
@@ -376,6 +390,9 @@ fn find_binary_expressions_right(
 }
 
 fn find_unary_expression(cn: &mut CacheLevel, cache: &Cache, n: usize, (or, er): (&Vector, &Expr)) {
+    if !can_use_required_vars(er.var_mask, n) {
+        return;
+    }
     if er.prec() < 12 {
         return;
     }
@@ -402,6 +419,9 @@ fn find_unary_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
 
 fn find_parens_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
     for (or, er) in &cache[n - 2] {
+        if !can_use_required_vars(er.var_mask, n) {
+            return;
+        }
         if er.op < Operator::Parens {
             let erp: NonNull<Expr> = er.into();
             if n <= MAX_CACHE_LENGTH {
