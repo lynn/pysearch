@@ -44,8 +44,8 @@ fn unit_if(b: bool) -> Option<()> {
 }
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
-    let all_mask: Mask = (1 << INPUTS.len()) - 1;
-    if !REUSE_VARS && expr.var_mask == all_mask {
+    const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
+    if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
             if let Some(old) = mp.insert(output[i], GOAL[i]) {
@@ -65,12 +65,28 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
         return;
     }
 
-    for l in cache {
-        if let Some(e) = l.get(&output) {
-            if e.prec() >= expr.prec() {
-                return;
+    if n <= MAX_LENGTH - 2 {
+        for l in cache {
+            if let Some(e) = l.get(&output) {
+                if e.prec() >= expr.prec() {
+                    return;
+                }
             }
         }
+    }
+
+    if n > MAX_CACHE_LENGTH {
+        for dfs_len in n + 2..=MAX_LENGTH {
+            find_binary_expressions_left(level, cache, dfs_len, n, (&output, &expr));
+            find_binary_expressions_right(level, cache, dfs_len, n, (&output, &expr));
+        }
+        if n + 1 <= MAX_LENGTH {
+            find_unary_expression(level, cache, n + 1, (&output, &expr));
+        }
+        if n + 2 < MAX_LENGTH && expr.op < Operator::Parens {
+            save(level, output, Expr::parens((&expr).into()), n + 2, cache);
+        }
+        return;
     }
 
     insert_to_level(level, output, expr);
@@ -89,250 +105,308 @@ fn insert_to_level(level: &mut CacheLevel, output: Vector, expr: Expr) {
     }
 }
 
-fn find_binary_expressions(
+fn find_1_byte_operators(
+    cn: &mut CacheLevel,
+    cache: &Cache,
+    n: usize,
+    (ol, el): (&Vector, &Expr),
+    (or, er): (&Vector, &Expr),
+) {
+    if er.is_literal() && el.is_literal() {
+        return;
+    }
+    let elp: NonNull<Expr> = el.into();
+    let erp: NonNull<Expr> = er.into();
+    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+        return;
+    }
+    let mask = el.var_mask | er.var_mask;
+    // For commutative operators, choose an arbitrary order for the two operands based on memory
+    // address.
+    let use_commutative_op = |prec| el.prec() >= prec && er.prec() >= prec && elp <= erp;
+    if USE_LT && el.prec() >= 5 && er.prec() > 5 {
+        save(
+            cn,
+            vec_lt(ol, or),
+            Expr::bin(elp, erp, Operator::Lt, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_BIT_OR && use_commutative_op(6) {
+        save(
+            cn,
+            ol.clone() | or,
+            Expr::bin(elp, erp, Operator::BitOr, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_BIT_XOR && use_commutative_op(7) {
+        save(
+            cn,
+            ol.clone() ^ or,
+            Expr::bin(elp, erp, Operator::BitXor, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_BIT_AND && use_commutative_op(8) {
+        save(
+            cn,
+            ol.clone() & or,
+            Expr::bin(elp, erp, Operator::BitAnd, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_ADD && use_commutative_op(10) {
+        save(
+            cn,
+            ol.clone() + or,
+            Expr::bin(elp, erp, Operator::Add, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_SUB && el.prec() >= 10 && er.prec() > 10 {
+        save(
+            cn,
+            ol.clone() - or,
+            Expr::bin(elp, erp, Operator::Sub, mask),
+            n,
+            cache,
+        );
+    }
+    // No `use_commutative_op` here because there are other operators with precedence 11 that could
+    // break commutativity.
+    if USE_MUL && er.prec() > 11 && (el.prec() > 11 && elp <= erp || el.prec() == 11) {
+        save(
+            cn,
+            ol.clone() * or,
+            Expr::bin(elp, erp, Operator::Mul, mask),
+            n,
+            cache,
+        );
+    }
+    if el.prec() >= 11 && er.prec() > 11 {
+        if let Some((div, modulo)) = divmod(ol, or) {
+            if USE_MOD {
+                save(
+                    cn,
+                    modulo,
+                    Expr::bin(elp, erp, Operator::Mod, mask),
+                    n,
+                    cache,
+                );
+            }
+            if USE_DIV1 {
+                save(cn, div, Expr::bin(elp, erp, Operator::Div1, mask), n, cache);
+            }
+        }
+        if USE_GCD {
+            save(
+                cn,
+                vec_gcd(ol, or),
+                Expr::bin(elp, erp, Operator::Gcd, mask),
+                n,
+                cache,
+            );
+        }
+    }
+}
+
+fn find_2_byte_operators(
+    cn: &mut CacheLevel,
+    cache: &Cache,
+    n: usize,
+    (ol, el): (&Vector, &Expr),
+    (or, er): (&Vector, &Expr),
+) {
+    if er.is_literal() && el.is_literal() {
+        return;
+    }
+    let elp: NonNull<Expr> = el.into();
+    let erp: NonNull<Expr> = er.into();
+    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+        return;
+    }
+    let mask = el.var_mask | er.var_mask;
+    if USE_OR && el.prec() >= 3 && er.prec() > 3 && ok_before_keyword(el) && ok_after_keyword(er) {
+        save(
+            cn,
+            vec_or(ol, or),
+            Expr::bin(elp, erp, Operator::Or, mask),
+            n,
+            cache,
+        );
+    }
+    if USE_LE && el.prec() >= 5 && er.prec() > 5 {
+        save(
+            cn,
+            vec_le(ol, or),
+            Expr::bin(elp, erp, Operator::Le, mask),
+            n,
+            cache,
+        );
+    }
+    if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..=31) {
+        if USE_BIT_SHL {
+            save(
+                cn,
+                ol.clone() << or,
+                Expr::bin(elp, erp, Operator::BitShl, mask),
+                n,
+                cache,
+            );
+        }
+        if USE_BIT_SHR {
+            save(
+                cn,
+                ol.clone() >> or,
+                Expr::bin(elp, erp, Operator::BitShr, mask),
+                n,
+                cache,
+            );
+        }
+    }
+    if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
+        if let Some((div, _)) = divmod(ol, or) {
+            save(cn, div, Expr::bin(elp, erp, Operator::Div2, mask), n, cache);
+        }
+    }
+    if USE_EXP && el.prec() > 13 && er.prec() >= 13 && vec_in(or, 0..=6) {
+        save(
+            cn,
+            vec_pow(ol, or),
+            Expr::bin(elp, erp, Operator::Exp, mask),
+            n,
+            cache,
+        );
+    }
+}
+
+fn find_3_byte_operators(
+    cn: &mut CacheLevel,
+    cache: &Cache,
+    n: usize,
+    (ol, el): (&Vector, &Expr),
+    (or, er): (&Vector, &Expr),
+) {
+    if er.is_literal() && el.is_literal() {
+        return;
+    }
+    let elp: NonNull<Expr> = el.into();
+    let erp: NonNull<Expr> = er.into();
+    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+        return;
+    }
+    let mask = el.var_mask | er.var_mask;
+    if el.prec() >= 3 && er.prec() > 3 {
+        let z = vec_or(ol, or);
+        if USE_OR && !ok_before_keyword(el) && ok_after_keyword(er) {
+            save(
+                cn,
+                z.clone(),
+                Expr::bin(elp, erp, Operator::SpaceOr, mask),
+                n,
+                cache,
+            );
+        }
+        if USE_OR && ok_before_keyword(el) && !ok_after_keyword(er) {
+            save(
+                cn,
+                z,
+                Expr::bin(elp, erp, Operator::OrSpace, mask),
+                n,
+                cache,
+            );
+        }
+    }
+}
+
+fn find_binary_expressions_left(
     cn: &mut CacheLevel,
     cache: &Cache,
     n: usize,
     k: usize,
-    (or, er): (&Vector, &Expr),
+    r: (&Vector, &Expr),
 ) {
-    // 1-byte operators
-    for (ol, el) in &cache[n - k - 1] {
-        if er.is_literal() && el.is_literal() {
-            continue;
-        }
-        let elp: NonNull<Expr> = el.into();
-        let erp: NonNull<Expr> = er.into();
-        if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-            continue;
-        }
-        let mask = el.var_mask | er.var_mask;
-        if USE_LT && el.prec() >= 5 && er.prec() > 5 {
-            save(
-                cn,
-                vec_lt(ol, or),
-                Expr::bin(elp, erp, Operator::Lt, mask),
-                n,
-                cache,
-            );
-        }
-        if USE_BIT_OR && el.prec() >= 6 && er.prec() > 6 {
-            save(
-                cn,
-                ol.clone() | or,
-                Expr::bin(elp, erp, Operator::BitOr, mask),
-                n,
-                cache,
-            );
-        }
-        if USE_BIT_XOR && el.prec() >= 7 && er.prec() > 7 {
-            save(
-                cn,
-                ol.clone() ^ or,
-                Expr::bin(elp, erp, Operator::BitXor, mask),
-                n,
-                cache,
-            );
-        }
-        if USE_BIT_AND && el.prec() >= 8 && er.prec() > 8 {
-            save(
-                cn,
-                ol.clone() & or,
-                Expr::bin(elp, erp, Operator::BitAnd, mask),
-                n,
-                cache,
-            );
-        }
-        if el.prec() >= 10 && er.prec() > 10 {
-            if USE_ADD {
-                save(
-                    cn,
-                    ol.clone() + or,
-                    Expr::bin(elp, erp, Operator::Add, mask),
-                    n,
-                    cache,
-                );
-            }
-            if USE_SUB {
-                save(
-                    cn,
-                    ol.clone() - or,
-                    Expr::bin(elp, erp, Operator::Sub, mask),
-                    n,
-                    cache,
-                );
-            }
-        }
-        if el.prec() >= 11 && er.prec() > 11 {
-            if USE_MUL {
-                save(
-                    cn,
-                    ol.clone() * or,
-                    Expr::bin(elp, erp, Operator::Mul, mask),
-                    n,
-                    cache,
-                );
-            }
-            if let Some((div, modulo)) = divmod(ol, or) {
-                if USE_MOD {
-                    save(
-                        cn,
-                        modulo,
-                        Expr::bin(elp, erp, Operator::Mod, mask),
-                        n,
-                        cache,
-                    );
-                }
-                if USE_DIV1 {
-                    save(cn, div, Expr::bin(elp, erp, Operator::Div1, mask), n, cache);
-                }
-            }
-            if USE_GCD {
-                save(
-                    cn,
-                    vec_gcd(ol, or),
-                    Expr::bin(elp, erp, Operator::Gcd, mask),
-                    n,
-                    cache,
-                );
-            }
-        }
+    for l in &cache[n - k - 1] {
+        find_1_byte_operators(cn, cache, n, l, r);
     }
-    // 2-byte operators
     if n < k + 3 {
         return;
     }
-    for (ol, el) in &cache[n - k - 2] {
-        if er.is_literal() && el.is_literal() {
-            continue;
-        }
-        let elp: NonNull<Expr> = el.into();
-        let erp: NonNull<Expr> = er.into();
-        if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-            continue;
-        }
-        let mask = el.var_mask | er.var_mask;
-        if USE_OR
-            && el.prec() >= 3
-            && er.prec() > 3
-            && ok_before_keyword(el)
-            && ok_after_keyword(er)
-        {
-            save(
-                cn,
-                vec_or(ol, or),
-                Expr::bin(elp, erp, Operator::Or, mask),
-                n,
-                cache,
-            );
-        }
-        if USE_LE && el.prec() >= 5 && er.prec() > 5 {
-            save(
-                cn,
-                vec_le(ol, or),
-                Expr::bin(elp, erp, Operator::Le, mask),
-                n,
-                cache,
-            );
-        }
-        if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..=31) {
-            if USE_BIT_SHL {
-                save(
-                    cn,
-                    ol.clone() << or,
-                    Expr::bin(elp, erp, Operator::BitShl, mask),
-                    n,
-                    cache,
-                );
-            }
-            if USE_BIT_SHR {
-                save(
-                    cn,
-                    ol.clone() >> or,
-                    Expr::bin(elp, erp, Operator::BitShr, mask),
-                    n,
-                    cache,
-                );
-            }
-        }
-        if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
-            if let Some((div, _)) = divmod(ol, or) {
-                save(cn, div, Expr::bin(elp, erp, Operator::Div2, mask), n, cache);
-            }
-        }
-        if USE_EXP && el.prec() > 13 && er.prec() >= 13 && vec_in(or, 0..=6) {
-            save(
-                cn,
-                vec_pow(ol, or),
-                Expr::bin(elp, erp, Operator::Exp, mask),
-                n,
-                cache,
-            );
-        }
+    for l in &cache[n - k - 2] {
+        find_2_byte_operators(cn, cache, n, l, r);
     }
-    // 3-byte operators
     if n < k + 4 {
         return;
     }
-    for (ol, el) in &cache[n - k - 3] {
-        if er.is_literal() && el.is_literal() {
-            continue;
-        }
-        let elp: NonNull<Expr> = el.into();
-        let erp: NonNull<Expr> = er.into();
-        if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-            continue;
-        }
-        let mask = el.var_mask | er.var_mask;
-        if el.prec() >= 3 && er.prec() > 3 {
-            let z = vec_or(ol, or);
-            if USE_OR && !ok_before_keyword(el) && ok_after_keyword(er) {
-                save(
-                    cn,
-                    z.clone(),
-                    Expr::bin(elp, erp, Operator::SpaceOr, mask),
-                    n,
-                    cache,
-                );
-            }
-            if USE_OR && ok_before_keyword(el) && !ok_after_keyword(er) {
-                save(
-                    cn,
-                    z,
-                    Expr::bin(elp, erp, Operator::OrSpace, mask),
-                    n,
-                    cache,
-                );
-            }
-        }
+    for l in &cache[n - k - 3] {
+        find_3_byte_operators(cn, cache, n, l, r);
+    }
+}
+
+fn find_binary_expressions_right(
+    cn: &mut CacheLevel,
+    cache: &Cache,
+    n: usize,
+    k: usize,
+    l: (&Vector, &Expr),
+) {
+    for r in &cache[n - k - 1] {
+        find_1_byte_operators(cn, cache, n, l, r);
+    }
+    if n < k + 3 {
+        return;
+    }
+    for r in &cache[n - k - 2] {
+        find_2_byte_operators(cn, cache, n, l, r);
+    }
+    if n < k + 4 {
+        return;
+    }
+    for r in &cache[n - k - 3] {
+        find_3_byte_operators(cn, cache, n, l, r);
+    }
+}
+
+fn find_unary_expression(cn: &mut CacheLevel, cache: &Cache, n: usize, (or, er): (&Vector, &Expr)) {
+    if er.prec() < 12 {
+        return;
+    }
+    let erp: NonNull<Expr> = er.into();
+    if USE_BIT_NEG {
+        save(
+            cn,
+            !or.clone(),
+            Expr::unary(erp, Operator::BitNeg),
+            n,
+            cache,
+        );
+    }
+    if USE_NEG {
+        save(cn, -or.clone(), Expr::unary(erp, Operator::Neg), n, cache);
     }
 }
 
 fn find_unary_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
-    for (or, er) in cache[n - 1].iter() {
-        let erp: NonNull<Expr> = er.into();
-        if er.prec() >= 12 {
-            if USE_BIT_NEG {
-                save(
-                    cn,
-                    !or.clone(),
-                    Expr::unary(erp, Operator::BitNeg),
-                    n,
-                    cache,
-                );
-            }
-            if USE_NEG {
-                save(cn, -or.clone(), Expr::unary(erp, Operator::Neg), n, cache);
-            }
-        }
+    for r in &cache[n - 1] {
+        find_unary_expression(cn, cache, n, r);
     }
 }
 
 fn find_parens_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
-    for (or, er) in cache[n - 2].iter() {
+    for (or, er) in &cache[n - 2] {
         if er.op < Operator::Parens {
             let erp: NonNull<Expr> = er.into();
-            cn.insert(or.clone(), Expr::parens(erp));
+            if n <= MAX_CACHE_LENGTH {
+                cn.insert(or.clone(), Expr::parens(erp));
+            } else {
+                save(cn, or.clone(), Expr::parens(erp), n, cache);
+            }
         }
     }
 }
@@ -351,7 +425,7 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     }
     if MAX_LITERAL > 0 {
         if let Some(m) = (10 as Num).checked_pow(n as u32 - 1) {
-            for lit in m..=m.saturating_mul(9).saturating_add(m-1).min(MAX_LITERAL) {
+            for lit in m..=m.saturating_mul(9).saturating_add(m - 1).min(MAX_LITERAL) {
                 cn.insert(Vector::constant(lit), Expr::literal(lit as Literal));
             }
         }
@@ -376,7 +450,7 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
             }
             .map(move |r| {
                 let mut cn = CacheLevel::new();
-                find_binary_expressions(&mut cn, cache, n, k, r);
+                find_binary_expressions_left(&mut cn, cache, n, k, r);
                 cn
             })
         })
@@ -421,7 +495,7 @@ fn find_expressions(cache: &mut Cache, n: usize) {
     }
     for k in 1..n - 1 {
         for r in &cache[k] {
-            find_binary_expressions(&mut cn, cache, n, k, r);
+            find_binary_expressions_left(&mut cn, cache, n, k, r);
         }
     }
 
@@ -441,16 +515,23 @@ fn main() {
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let start = Instant::now();
+    let mut layer_start = Instant::now();
     for n in 1..=MAX_LENGTH {
-        println!("Finding length {n}...");
-        let layer_start = Instant::now();
+        match n {
+            0..=MAX_CACHE_LENGTH => println!("Finding length {n}..."),
+            n if n == MAX_CACHE_LENGTH + 1 => println!("Finding length {n}-{MAX_LENGTH}..."),
+            _ => {}
+        }
         find_expressions(&mut cache, n);
         let count = cache[n].len();
         total_count += count;
-        let time = layer_start.elapsed();
-        println!("Explored {count} expressions in {time:?}");
-        let total_time = start.elapsed();
-        println!("Total: {total_count} expressions in {total_time:?}\n");
+        if n <= MAX_CACHE_LENGTH || n == MAX_LENGTH {
+            let time = layer_start.elapsed();
+            println!("Explored {count} expressions in {time:?}");
+            let total_time = start.elapsed();
+            println!("Total: {total_count} expressions in {total_time:?}\n");
+            layer_start = Instant::now()
+        }
     }
     println!();
 }
