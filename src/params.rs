@@ -23,8 +23,8 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
-pub fn match_goal(output: &Vector, _expr: &Expr) -> bool {
-    output.clone().map(mapping) == Vector::from_slice(GOAL)
+pub fn match_goal(expr: &Expr) -> bool {
+    expr.output.clone().map(mapping) == Vector::from_slice(GOAL)
 }
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
