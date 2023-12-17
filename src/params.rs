@@ -60,6 +60,9 @@ pub const USE_EXP: bool = true;
 /// Use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8).
 pub const C_STYLE_MOD: bool = false;
 
+/// Use C-style bit shift (1 >> 32 == 1) rather than Python style (1 >> 32 == 0).
+pub const C_STYLE_BIT_SHIFT: bool = false;
+
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
 

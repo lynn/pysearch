@@ -15,7 +15,7 @@ use expr::{ok_after_keyword, ok_before_keyword, Expr, Literal, Mask};
 use operator::Operator;
 use params::*;
 
-use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
+use vec::{divmod, vec_bit_shl, vec_bit_shr, vec_gcd, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
 use hashbrown::{hash_map::Entry, HashMap};
 use std::ptr::NonNull;
@@ -49,7 +49,7 @@ fn unit_if(b: bool) -> Option<()> {
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
-    
+
     if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&output, &expr) {
         println!("{expr}");
         return;
@@ -58,7 +58,7 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
     if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
         return;
     }
-    
+
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
@@ -261,24 +261,28 @@ fn find_2_byte_operators(
             cache,
         );
     }
-    if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..Num::BITS as Num) {
+    if el.prec() >= 9 && er.prec() > 9 {
         if USE_BIT_SHL {
-            save(
-                cn,
-                ol.clone() << or,
-                Expr::bin(elp, erp, Operator::BitShl, mask),
-                n,
-                cache,
-            );
+            if let Some(output) = vec_bit_shl(ol, or) {
+                save(
+                    cn,
+                    output,
+                    Expr::bin(elp, erp, Operator::BitShl, mask),
+                    n,
+                    cache,
+                );
+            }
         }
         if USE_BIT_SHR {
-            save(
-                cn,
-                ol.clone() >> or,
-                Expr::bin(elp, erp, Operator::BitShr, mask),
-                n,
-                cache,
-            );
+            if let Some(output) = vec_bit_shr(ol, or) {
+                save(
+                    cn,
+                    output,
+                    Expr::bin(elp, erp, Operator::BitShr, mask),
+                    n,
+                    cache,
+                );
+            }
         }
     }
     if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
