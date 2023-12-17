@@ -15,9 +15,9 @@ use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask};
 use operator::Operator;
 use params::*;
 
-use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow};
+use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
-use hashbrown::{hash_set::Entry, HashSet, HashMap};
+use hashbrown::{hash_set::Entry, HashMap, HashSet};
 use std::ptr::NonNull;
 use std::time::Instant;
 
@@ -49,7 +49,7 @@ fn unit_if(b: bool) -> Option<()> {
 
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
-    
+
     if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&expr) {
         println!("{expr}");
         return;
@@ -58,7 +58,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache) {
     if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
         return;
     }
-    
+
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
@@ -98,9 +98,10 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache) {
 }
 
 fn insert_to_level(level: &mut CacheLevel, expr: Expr) {
+    let prec = expr.prec();
     match level.entry(expr) {
         Entry::Occupied(e) => {
-            if expr.prec() > e.get().prec() {
+            if prec > e.get().prec() {
                 e.replace();
             }
         }
@@ -110,13 +111,7 @@ fn insert_to_level(level: &mut CacheLevel, expr: Expr) {
     }
 }
 
-fn find_1_byte_operators(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    n: usize,
-    el: &Expr,
-    er: &Expr,
-) {
+fn find_1_byte_operators(cn: &mut CacheLevel, cache: &Cache, n: usize, el: &Expr, er: &Expr) {
     if er.is_literal() && el.is_literal() {
         return;
     }
@@ -217,13 +212,7 @@ fn find_1_byte_operators(
     }
 }
 
-fn find_2_byte_operators(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    n: usize,
-    el: &Expr,
-    er: &Expr,
-) {
+fn find_2_byte_operators(cn: &mut CacheLevel, cache: &Cache, n: usize, el: &Expr, er: &Expr) {
     if er.is_literal() && el.is_literal() {
         return;
     }
@@ -289,13 +278,7 @@ fn find_2_byte_operators(
     }
 }
 
-fn find_3_byte_operators(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    n: usize,
-    el: &Expr,
-    er: &Expr,
-) {
+fn find_3_byte_operators(cn: &mut CacheLevel, cache: &Cache, n: usize, el: &Expr, er: &Expr) {
     if er.is_literal() && el.is_literal() {
         return;
     }
@@ -310,34 +293,27 @@ fn find_3_byte_operators(
     }
     let ol = &el.output;
     let or = &er.output;
-    if el.prec() >= 3 && er.prec() > 3 {
+    if USE_OR && el.prec() >= 3 && er.prec() > 3 {
         let z = vec_or(ol, or);
-        if USE_OR && !ok_before_keyword(el) && ok_after_keyword(er) {
-            save(
-                cn,
-                Expr::bin(elp, erp, Operator::SpaceOr, mask, z.clone()),
-                n,
-                cache,
-            );
-        }
-        if USE_OR && ok_before_keyword(el) && !ok_after_keyword(er) {
-            save(
+        match (ok_before_keyword(el), ok_after_keyword(er)) {
+            (true, false) => save(
                 cn,
                 Expr::bin(elp, erp, Operator::OrSpace, mask, z),
                 n,
                 cache,
-            );
+            ),
+            (false, true) => save(
+                cn,
+                Expr::bin(elp, erp, Operator::SpaceOr, mask, z),
+                n,
+                cache,
+            ),
+            _ => {}
         }
     }
 }
 
-fn find_binary_expressions_left(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    n: usize,
-    k: usize,
-    r: &Expr,
-) {
+fn find_binary_expressions_left(cn: &mut CacheLevel, cache: &Cache, n: usize, k: usize, r: &Expr) {
     for l in &cache[n - k - 1] {
         find_1_byte_operators(cn, cache, n, l, r);
     }
@@ -355,13 +331,7 @@ fn find_binary_expressions_left(
     }
 }
 
-fn find_binary_expressions_right(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    n: usize,
-    k: usize,
-    l: &Expr,
-) {
+fn find_binary_expressions_right(cn: &mut CacheLevel, cache: &Cache, n: usize, k: usize, l: &Expr) {
     for r in &cache[n - k - 1] {
         find_1_byte_operators(cn, cache, n, l, r);
     }
@@ -425,19 +395,19 @@ fn find_parens_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
 
 fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     if n == 1 {
-        for (i, _input) in INPUTS.iter().enumerate() {
-            cn.insert(Expr::variable(i));
+        for (i, input) in INPUTS.iter().enumerate() {
+            cn.insert(Expr::variable(i, Vector::from_slice(input.vec)));
         }
     }
     for &lit in LITERALS {
         if positive_integer_length(lit) == n {
-            cn.insert(Expr::literal(lit as Num));
+            cn.insert(Expr::literal(lit));
         }
     }
     if MAX_LITERAL > 0 {
         if let Some(m) = (10 as Num).checked_pow(n as u32 - 1) {
             for lit in m..=m.saturating_mul(9).saturating_add(m - 1).min(MAX_LITERAL) {
-                cn.insert(Expr::literal(lit as Num));
+                cn.insert(Expr::literal(lit));
             }
         }
     }
@@ -481,8 +451,8 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
                 if level.len() < level2.len() {
                     std::mem::swap(&mut level, &mut level2);
                 }
-                for (output, expr) in level2 {
-                    insert_to_level(&mut level, output, expr);
+                for expr in level2 {
+                    insert_to_level(&mut level, expr);
                 }
                 level
             },
