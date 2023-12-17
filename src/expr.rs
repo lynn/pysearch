@@ -1,21 +1,21 @@
-use std::{fmt::Display, ptr::NonNull};
 use std::hash::{Hash, Hasher};
+use std::{fmt::Display, ptr::NonNull};
 
 use crate::{
-    vec::Vector,
     operator::Operator,
     params::{Num, INPUTS},
+    vec::Vector,
 };
 
 pub type Mask = u8;
 
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
     pub op: Operator,
     pub var_mask: Mask,
-    pub output: Vector
+    pub output: Vector,
 }
 unsafe impl Send for Expr {}
 unsafe impl Sync for Expr {}
@@ -25,13 +25,13 @@ impl Expr {
         self.op as u8 >> 4
     }
 
-    pub fn variable(index: usize) -> Self {
+    pub fn variable(index: usize, output: Vector) -> Self {
         Self {
             left: None,
             right: None,
             op: Operator::Variable,
             var_mask: 1 << index,
-            output: Vector::from_slice(INPUTS[index].vec)
+            output,
         }
     }
 
@@ -41,7 +41,7 @@ impl Expr {
             right: None,
             op: Operator::Literal,
             var_mask: 0,
-            output: Vector::constant(value)
+            output: Vector::constant(value),
         }
     }
 
@@ -49,13 +49,19 @@ impl Expr {
         self.var_mask == 0
     }
 
-    pub fn bin(el: NonNull<Expr>, er: NonNull<Expr>, op: Operator, var_mask: Mask, output: Vector) -> Self {
+    pub fn bin(
+        el: NonNull<Expr>,
+        er: NonNull<Expr>,
+        op: Operator,
+        var_mask: Mask,
+        output: Vector,
+    ) -> Self {
         Self {
             left: Some(el),
             right: Some(er),
             op,
             var_mask,
-            output
+            output,
         }
     }
 
@@ -64,18 +70,25 @@ impl Expr {
             left: None,
             right: Some(er),
             op,
-            var_mask: unsafe { *er.as_ptr() }.var_mask,
-            output
+            var_mask: unsafe { (*er.as_ptr()).var_mask },
+            output,
         }
     }
 
     pub fn parens(er: NonNull<Expr>) -> Self {
-        Self {
-            left: None,
-            right: Some(er),
-            op: Operator::Parens,
-            var_mask: unsafe { *er.as_ptr() }.var_mask,
-            output: unsafe { *er.as_ptr() }.output
+        unsafe {
+            let Self {
+                var_mask,
+                ref output,
+                ..
+            } = *er.as_ptr();
+            Self {
+                left: None,
+                right: Some(er),
+                op: Operator::Parens,
+                var_mask,
+                output: output.clone(),
+            }
         }
     }
 }
@@ -92,7 +105,11 @@ impl Display for Expr {
                 write!(f, ")")?;
             }
         } else if self.op == Operator::Variable {
-            write!(f, "{}", INPUTS[self.var_mask.trailing_zeros() as usize].name)?;
+            write!(
+                f,
+                "{}",
+                INPUTS[self.var_mask.trailing_zeros() as usize].name
+            )?;
         } else {
             write!(f, "{}", self.output[0])?;
         }

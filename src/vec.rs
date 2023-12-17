@@ -5,7 +5,7 @@ use crate::{
     params::{Num, C_STYLE_MOD, GOAL},
 };
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vector([Num; GOAL.len()]);
 
 impl Vector {
@@ -80,7 +80,7 @@ impl_op!(BitXor, bitxor, ^=);
 impl_op!(Shl, shl, <<=);
 impl_op!(Shr, shr, >>=);
 impl_unary!(Not, not, !);
-impl_unary!(Neg, neg, (|x|0-x));
+impl_unary!(Neg, neg, (|x| 0 - x));
 
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if left
