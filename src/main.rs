@@ -15,7 +15,7 @@ use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask};
 use operator::Operator;
 use params::*;
 
-use vec::{divmod, vec_gcd, vec_in, vec_le, vec_lt, vec_or, vec_pow, Vector};
+use vec::{divmod, vec_bit_shl, vec_bit_shr, vec_gcd, vec_le, vec_lt, vec_or, vec_pow, Vector};
 
 use hashbrown::{hash_set::Entry, HashMap, HashSet};
 use std::ptr::NonNull;
@@ -243,22 +243,26 @@ fn find_2_byte_operators(cn: &mut CacheLevel, cache: &Cache, n: usize, el: &Expr
             cache,
         );
     }
-    if el.prec() >= 9 && er.prec() > 9 && vec_in(or, 0..Num::BITS as Num) {
+    if el.prec() >= 9 && er.prec() > 9 {
         if USE_BIT_SHL {
-            save(
-                cn,
-                Expr::bin(elp, erp, Operator::BitShl, mask, ol.clone() << or),
-                n,
-                cache,
-            );
+            if let Some(output) = vec_bit_shl(ol, or) {
+                save(
+                    cn,
+                    Expr::bin(elp, erp, Operator::BitShl, mask, output),
+                    n,
+                    cache,
+                );
+            }
         }
         if USE_BIT_SHR {
-            save(
-                cn,
-                Expr::bin(elp, erp, Operator::BitShr, mask, ol.clone() >> or),
-                n,
-                cache,
-            );
+            if let Some(output) = vec_bit_shr(ol, or) {
+                save(
+                    cn,
+                    Expr::bin(elp, erp, Operator::BitShr, mask, output),
+                    n,
+                    cache,
+                );
+            }
         }
     }
     if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
@@ -496,23 +500,19 @@ fn main() {
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let start = Instant::now();
-    let mut layer_start = Instant::now();
     for n in 1..=MAX_LENGTH {
         match n {
-            0..=MAX_CACHE_LENGTH => println!("Finding length {n}..."),
-            n if n == MAX_CACHE_LENGTH + 1 => println!("Finding length {n}-{MAX_LENGTH}..."),
-            _ => {}
+            0..=MAX_CACHE_LENGTH | MAX_LENGTH => println!("Finding length {n}..."),
+            _ => println!("Finding length {n}-{MAX_LENGTH}..."),
         }
+        let layer_start = Instant::now();
         find_expressions(&mut cache, n);
         let count = cache[n].len();
         total_count += count;
-        if n <= MAX_CACHE_LENGTH || n == MAX_LENGTH {
-            let time = layer_start.elapsed();
-            println!("Explored {count} expressions in {time:?}");
-            let total_time = start.elapsed();
-            println!("Total: {total_count} expressions in {total_time:?}\n");
-            layer_start = Instant::now()
-        }
+        let time = layer_start.elapsed();
+        println!("Explored {count} expressions in {time:?}");
+        let total_time = start.elapsed();
+        println!("Total: {total_count} expressions in {total_time:?}\n");
     }
     println!();
 }

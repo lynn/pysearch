@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut, RangeBounds};
 
 use crate::{
     gcd::gcd,
-    params::{Num, C_STYLE_MOD, GOAL},
+    params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL},
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -146,6 +146,28 @@ pub fn vec_pow(left: &Vector, right: &Vector) -> Option<Vector> {
         *x = (*x).checked_pow((*y).try_into().ok()?)?;
     }
     Some(left)
+}
+
+pub fn vec_bit_shl(left: &Vector, right: &Vector) -> Option<Vector> {
+    if C_STYLE_BIT_SHIFT || vec_in(right, 0..Num::BITS as Num) {
+        Some(left.clone() << right)
+    } else {
+        None
+    }
+}
+
+pub fn vec_bit_shr(left: &Vector, right: &Vector) -> Option<Vector> {
+    if C_STYLE_BIT_SHIFT {
+        Some(left.clone() >> right)
+    } else if vec_in(right, 0..) {
+        let mut result = left.clone();
+        for (x, y) in result.iter_mut().zip(right.iter()) {
+            *x >>= std::cmp::min(*y, Num::BITS as Num - 1);
+        }
+        Some(result)
+    } else {
+        None
+    }
 }
 
 pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
