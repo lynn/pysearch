@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut, RangeBounds};
 
 use crate::{
     gcd::gcd,
-    params::{Num, C_STYLE_MOD, C_STYLE_BIT_SHIFT, GOAL},
+    params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL},
 };
 
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -80,7 +80,7 @@ impl_op!(BitXor, bitxor, ^=);
 impl_op!(Shl, shl, <<=);
 impl_op!(Shr, shr, >>=);
 impl_unary!(Not, not, !);
-impl_unary!(Neg, neg, (|x|0-x));
+impl_unary!(Neg, neg, (|x| 0 - x));
 
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
     if left

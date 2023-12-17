@@ -49,7 +49,7 @@ fn unit_if(b: bool) -> Option<()> {
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
-    
+
     if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&output, &expr) {
         println!("{expr}");
         return;
@@ -58,7 +58,7 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
     if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
         return;
     }
-    
+
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
