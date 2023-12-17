@@ -5,7 +5,7 @@ use crate::{
     params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL},
 };
 
-#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vector([Num; GOAL.len()]);
 
 impl Vector {

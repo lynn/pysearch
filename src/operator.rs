@@ -30,6 +30,7 @@ pub enum Operator {
     Exp = 0xD0,
     Parens = 0xE0,
     Literal = 0xF0,
+    Variable = 0xF1,
 }
 
 impl Display for Operator {
@@ -61,7 +62,7 @@ impl Display for Operator {
             Operator::BitNeg => write!(f, "~"),
             Operator::Exp => write!(f, "**"),
             Operator::Parens => write!(f, "("),
-            Operator::Literal => write!(f, ""),
+            Operator::Literal | Operator::Variable => write!(f, ""),
         }
     }
 }
