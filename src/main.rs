@@ -49,7 +49,7 @@ fn unit_if(b: bool) -> Option<()> {
 
 fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Cache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
-    
+
     if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&output, &expr) {
         println!("{expr}");
         return;
@@ -58,7 +58,7 @@ fn save(level: &mut CacheLevel, output: Vector, expr: Expr, n: usize, cache: &Ca
     if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
         return;
     }
-    
+
     if !REUSE_VARS && expr.var_mask == ALL_MASK {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
@@ -537,23 +537,19 @@ fn main() {
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let start = Instant::now();
-    let mut layer_start = Instant::now();
     for n in 1..=MAX_LENGTH {
         match n {
-            0..=MAX_CACHE_LENGTH => println!("Finding length {n}..."),
-            n if n == MAX_CACHE_LENGTH + 1 => println!("Finding length {n}-{MAX_LENGTH}..."),
-            _ => {}
+            0..=MAX_CACHE_LENGTH | MAX_LENGTH => println!("Finding length {n}..."),
+            _ => println!("Finding length {n}-{MAX_LENGTH}..."),
         }
+        let layer_start = Instant::now();
         find_expressions(&mut cache, n);
         let count = cache[n].len();
         total_count += count;
-        if n <= MAX_CACHE_LENGTH || n == MAX_LENGTH {
-            let time = layer_start.elapsed();
-            println!("Explored {count} expressions in {time:?}");
-            let total_time = start.elapsed();
-            println!("Total: {total_count} expressions in {total_time:?}\n");
-            layer_start = Instant::now()
-        }
+        let time = layer_start.elapsed();
+        println!("Explored {count} expressions in {time:?}");
+        let total_time = start.elapsed();
+        println!("Total: {total_count} expressions in {total_time:?}\n");
     }
     println!();
 }
