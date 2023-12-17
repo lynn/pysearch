@@ -541,23 +541,19 @@ fn main() {
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let start = Instant::now();
-    let mut layer_start = Instant::now();
     for n in 1..=MAX_LENGTH {
         match n {
-            0..=MAX_CACHE_LENGTH => println!("Finding length {n}..."),
-            n if n == MAX_CACHE_LENGTH + 1 => println!("Finding length {n}-{MAX_LENGTH}..."),
-            _ => {}
+            0..=MAX_CACHE_LENGTH | MAX_LENGTH => println!("Finding length {n}..."),
+            _ => println!("Finding length {n}-{MAX_LENGTH}..."),
         }
+        let layer_start = Instant::now();
         find_expressions(&mut cache, n);
         let count = cache[n].len();
         total_count += count;
-        if n <= MAX_CACHE_LENGTH || n == MAX_LENGTH {
-            let time = layer_start.elapsed();
-            println!("Explored {count} expressions in {time:?}");
-            let total_time = start.elapsed();
-            println!("Total: {total_count} expressions in {total_time:?}\n");
-            layer_start = Instant::now()
-        }
+        let time = layer_start.elapsed();
+        println!("Explored {count} expressions in {time:?}");
+        let total_time = start.elapsed();
+        println!("Total: {total_count} expressions in {total_time:?}\n");
     }
     println!();
 }
