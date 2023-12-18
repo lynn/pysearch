@@ -70,25 +70,21 @@ impl Expr {
             left: None,
             right: Some(er),
             op,
-            var_mask: unsafe { (*er.as_ptr()).var_mask },
+            var_mask: unsafe { er.as_ref() }.var_mask,
             output,
         }
     }
 
     pub fn parens(er: NonNull<Expr>) -> Self {
-        unsafe {
-            let Self {
-                var_mask,
-                ref output,
-                ..
-            } = *er.as_ptr();
-            Self {
-                left: None,
-                right: Some(er),
-                op: Operator::Parens,
-                var_mask,
-                output: output.clone(),
-            }
+        let Self {
+            var_mask, output, ..
+        } = unsafe { er.as_ref() };
+        Self {
+            left: None,
+            right: Some(er),
+            op: Operator::Parens,
+            var_mask: *var_mask,
+            output: output.clone(),
         }
     }
 }
@@ -96,11 +92,11 @@ impl Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(left) = self.left {
-            Self::fmt(unsafe { &*left.as_ptr() }, f)?;
+            Self::fmt(unsafe { left.as_ref() }, f)?;
         }
         Display::fmt(&self.op, f)?;
         if let Some(right) = self.right {
-            Self::fmt(unsafe { &*right.as_ptr() }, f)?;
+            Self::fmt(unsafe { right.as_ref() }, f)?;
             if self.op == Operator::Parens {
                 write!(f, ")")?;
             }
@@ -133,7 +129,7 @@ impl PartialEq for Expr {
 pub fn ok_before_keyword(e: &Expr) -> bool {
     match e.right {
         None => e.op == Operator::Literal,
-        Some(right) => e.op == Operator::Parens || ok_before_keyword(unsafe { &*right.as_ptr() }),
+        Some(right) => e.op == Operator::Parens || ok_before_keyword(unsafe { right.as_ref() }),
     }
 }
 
@@ -141,6 +137,6 @@ pub fn ok_before_keyword(e: &Expr) -> bool {
 pub fn ok_after_keyword(e: &Expr) -> bool {
     match e.left {
         None => e.op != Operator::Literal && e.op != Operator::Variable,
-        Some(left) => ok_after_keyword(unsafe { &*left.as_ptr() }),
+        Some(left) => ok_after_keyword(unsafe { left.as_ref() }),
     }
 }
