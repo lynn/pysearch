@@ -1,9 +1,6 @@
 use std::ops::{Deref, DerefMut, RangeBounds};
 
-use crate::{
-    gcd::gcd,
-    params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL},
-};
+use crate::params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vector([Num; GOAL.len()]);
@@ -83,19 +80,20 @@ impl_unary!(Not, not, !);
 impl_unary!(Neg, neg, (|x| 0 - x));
 
 pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
-    if left
-        .iter()
-        .zip(right.iter())
-        .any(|(&x, &y)| y == 0 || (x, y) == (Num::MIN, !0))
-    {
-        None
-    } else if C_STYLE_MOD {
-        Some((left.clone() / right, left.clone() % right))
-    } else {
-        let modulo = (left.clone() % right + right) % right;
-        let div = (left.clone() - &modulo) / right;
-        Some((div, modulo))
+    let mut div = left.clone();
+    let mut modulo = left.clone();
+    for ((d, m), y) in div.iter_mut().zip(modulo.iter_mut()).zip(right.iter()) {
+        if C_STYLE_MOD {
+            *d = d.checked_div(*y)?;
+            *m %= *y;
+        } else {
+            if *y == 0 || (Num::MIN < 0 && *d == Num::MIN && *y == !0) {
+                return None;
+            }
+            (*d, *m) = num_integer::div_mod_floor(*d, *y);
+        }
     }
+    Some((div, modulo))
 }
 
 pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
@@ -135,7 +133,7 @@ pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
 pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
     let mut left = left.clone();
     for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = gcd(*x, *y);
+        *x = num_integer::gcd(*x, *y);
     }
     left
 }

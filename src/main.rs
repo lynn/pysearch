@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 
 pub mod expr;
-pub mod gcd;
 pub mod operator;
 
 #[path = "params.rs"]
