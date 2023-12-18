@@ -359,18 +359,12 @@ fn find_unary_expression(cn: &mut CacheLevel, cache: &Cache, n: usize, er: &Expr
     if er.prec() < 12 {
         return;
     }
-    let erp: NonNull<Expr> = er.into();
     let or = &er.output;
     if USE_BIT_NEG {
-        save(
-            cn,
-            Expr::unary(erp, Operator::BitNeg, !or.clone()),
-            n,
-            cache,
-        );
+        save(cn, Expr::unary(er, Operator::BitNeg, !or.clone()), n, cache);
     }
     if USE_NEG {
-        save(cn, Expr::unary(erp, Operator::Neg, -or.clone()), n, cache);
+        save(cn, Expr::unary(er, Operator::Neg, -or.clone()), n, cache);
     }
 }
 
@@ -386,11 +380,10 @@ fn find_parens_expressions(cn: &mut CacheLevel, cache: &Cache, n: usize) {
             return;
         }
         if er.op < Operator::Parens {
-            let erp: NonNull<Expr> = er.into();
             if n <= MAX_CACHE_LENGTH {
-                cn.insert(Expr::parens(erp));
+                cn.insert(Expr::parens(er));
             } else {
-                save(cn, Expr::parens(erp), n, cache);
+                save(cn, Expr::parens(er), n, cache);
             }
         }
     }
