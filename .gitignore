@@ -35,6 +35,7 @@
 # Added by cargo
 
 /target
+Cargo.lock
 
 # custom params
 params_*.rs
