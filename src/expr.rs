@@ -65,26 +65,23 @@ impl Expr {
         }
     }
 
-    pub fn unary(er: NonNull<Expr>, op: Operator, output: Vector) -> Self {
+    pub fn unary(er: &Expr, op: Operator, output: Vector) -> Self {
         Self {
             left: None,
-            right: Some(er),
+            right: Some(er.into()),
             op,
-            var_mask: unsafe { er.as_ref() }.var_mask,
+            var_mask: er.var_mask,
             output,
         }
     }
 
-    pub fn parens(er: NonNull<Expr>) -> Self {
-        let Self {
-            var_mask, output, ..
-        } = unsafe { er.as_ref() };
+    pub fn parens(er: &Expr) -> Self {
         Self {
             left: None,
-            right: Some(er),
+            right: Some(er.into()),
             op: Operator::Parens,
-            var_mask: *var_mask,
-            output: output.clone(),
+            var_mask: er.var_mask,
+            output: er.output.clone(),
         }
     }
 }
