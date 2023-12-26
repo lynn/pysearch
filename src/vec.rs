@@ -14,6 +14,7 @@ impl Vector {
         Vector(ns.try_into().expect("slice have same length"))
     }
 
+    #[inline]
     pub fn map(mut self, function: fn(Num) -> Num) -> Vector {
         for x in &mut self.0.iter_mut() {
             *x = function(*x)
