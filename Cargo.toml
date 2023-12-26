@@ -10,11 +10,10 @@ overflow-checks = false
 
 [features]
 simd = []
-rayon = ["dep:rayon", "hashbrown/rayon"]
 
 [dependencies]
-rayon = { version = "1.7.0", optional = true }
-hashbrown = "0.14.0"
+rayon = "1.7.0"
+hashbrown = { version = "0.14.0", features = ["rayon"]}
 num-integer = "0.1.45"
 
 # Doesn't seem to help much:

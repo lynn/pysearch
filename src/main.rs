@@ -37,7 +37,6 @@ fn can_use_required_vars(mask: u8, length: usize) -> bool {
     !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
 }
 
-#[cfg(feature = "rayon")]
 fn unit_if(b: bool) -> Option<()> {
     if b {
         Some(())
@@ -409,8 +408,7 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     }
 }
 
-#[cfg(feature = "rayon")]
-fn find_expressions(mut_cache: &mut Cache, n: usize) {
+fn find_expressions_multithread(mut_cache: &mut Cache, n: usize) {
     use rayon::{iter::Either, prelude::*};
 
     let cache = &mut_cache;
@@ -460,7 +458,6 @@ fn find_expressions(mut_cache: &mut Cache, n: usize) {
     mut_cache.push(cn);
 }
 
-#[cfg(not(feature = "rayon"))]
 fn find_expressions(cache: &mut Cache, n: usize) {
     let mut cn = CacheLevel::new();
     find_variables_and_literals(&mut cn, n);
@@ -498,7 +495,11 @@ fn main() {
             _ => println!("Finding length {n}-{MAX_LENGTH}..."),
         }
         let layer_start = Instant::now();
-        find_expressions(&mut cache, n);
+        if n >= MIN_MULTITHREAD_LENGTH {
+            find_expressions_multithread(&mut cache, n);
+        } else {
+            find_expressions(&mut cache, n);
+        }
         let count = cache[n].len();
         total_count += count;
         let time = layer_start.elapsed();
