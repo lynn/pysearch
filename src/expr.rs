@@ -9,7 +9,7 @@ use crate::{
 
 pub type Mask = u8;
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
@@ -110,15 +110,42 @@ impl Display for Expr {
     }
 }
 
-impl Hash for Expr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.output.hash(state);
+#[derive(Eq, Clone, Copy)]
+pub struct NonNullExpr(NonNull<Expr>);
+unsafe impl Send for NonNullExpr {}
+unsafe impl Sync for NonNullExpr {}
+
+impl NonNullExpr {
+    pub fn as_ptr(&self) -> *const Expr {
+        self.0.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&self) -> *mut Expr {
+        self.0.as_ptr()
     }
 }
 
-impl PartialEq for Expr {
+impl Into<NonNullExpr> for &Expr {
+    fn into(self) -> NonNullExpr {
+        NonNullExpr(self.into())
+    }
+}
+
+impl AsRef<Expr> for NonNullExpr {
+    fn as_ref(&self) -> &Expr {
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl Hash for NonNullExpr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().output.hash(state);
+    }
+}
+
+impl PartialEq for NonNullExpr {
     fn eq(&self, other: &Self) -> bool {
-        return self.output == other.output;
+        self.as_ref().output == other.as_ref().output
     }
 }
 

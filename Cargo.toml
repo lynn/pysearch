@@ -13,7 +13,7 @@ simd = []
 
 [dependencies]
 rayon = "1.7.0"
-hashbrown = { version = "0.14.0", features = ["rayon"]}
+hashbrown = { version = "0.14.0" }
 num-integer = "0.1.45"
 
 # Doesn't seem to help much:
