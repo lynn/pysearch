@@ -10,14 +10,13 @@ pub mod params;
 #[cfg_attr(not(feature = "simd"), path = "vec.rs")]
 pub mod vec;
 
-use expr::{ok_after_keyword, ok_before_keyword, Expr, Mask, NonNullExpr};
-use operator::Operator;
+use expr::{Expr, Mask, NonNullExpr};
+use operator::{BinaryOperator, Operator};
 use params::*;
 
-use vec::{divmod, vec_bit_shl, vec_bit_shr, vec_gcd, vec_le, vec_lt, vec_or, vec_pow, Vector};
+use vec::Vector;
 
 use hashbrown::{hash_set::Entry, HashMap, HashSet};
-use std::ptr::NonNull;
 use std::time::Instant;
 
 // cache[length][output] = highest-prec expression of that length yielding that output
@@ -102,19 +101,18 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
     level.push(expr);
 }
 
-fn find_1_byte_operators(
+fn apply_binary_operator(
     cn: &mut CacheLevel,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
     el: &Expr,
     er: &Expr,
+    op: BinaryOperator,
 ) {
     if er.is_literal() && el.is_literal() {
         return;
     }
-    let elp: NonNull<Expr> = el.into();
-    let erp: NonNull<Expr> = er.into();
     if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
         return;
     }
@@ -122,237 +120,15 @@ fn find_1_byte_operators(
     if !can_use_required_vars(mask, n) {
         return;
     }
-    let ol = &el.output;
-    let or = &er.output;
-    // For commutative operators, choose an arbitrary order for the two operands based on memory
-    // address.
-    let use_commutative_op = |prec| el.prec() >= prec && er.prec() >= prec && elp <= erp;
-    if USE_LT && el.prec() >= 5 && er.prec() > 5 {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Lt, mask, vec_lt(ol, or)),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_BIT_OR && use_commutative_op(6) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::BitOr, mask, ol.clone() | or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_BIT_XOR && use_commutative_op(7) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::BitXor, mask, ol.clone() ^ or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_BIT_AND && use_commutative_op(8) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::BitAnd, mask, ol.clone() & or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_ADD && use_commutative_op(10) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Add, mask, ol.clone() + or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_SUB && el.prec() >= 10 && er.prec() > 10 {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Sub, mask, ol.clone() - or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    // No `use_commutative_op` here because there are other operators with precedence 11 that could
-    // break commutativity.
-    if USE_MUL && er.prec() > 11 && (el.prec() > 11 && elp <= erp || el.prec() == 11) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Mul, mask, ol.clone() * or),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if el.prec() >= 11 && er.prec() > 11 {
-        if let Some((div, modulo)) = divmod(ol, or) {
-            if USE_MOD {
-                save(
-                    cn,
-                    Expr::bin(elp, erp, Operator::Mod, mask, modulo),
-                    n,
-                    cache,
-                    hashset_cache,
-                );
-            }
-            if USE_DIV1 {
-                save(
-                    cn,
-                    Expr::bin(elp, erp, Operator::Div1, mask, div),
-                    n,
-                    cache,
-                    hashset_cache,
-                );
-            }
-        }
-        if USE_GCD {
+    if op.can_apply(el, er) {
+        if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
             save(
                 cn,
-                Expr::bin(elp, erp, Operator::Gcd, mask, vec_gcd(ol, or)),
+                Expr::bin(el.into(), er.into(), op.into(), mask, output),
                 n,
                 cache,
                 hashset_cache,
             );
-        }
-    }
-}
-
-fn find_2_byte_operators(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    hashset_cache: &HashSetCache,
-    n: usize,
-    el: &Expr,
-    er: &Expr,
-) {
-    if er.is_literal() && el.is_literal() {
-        return;
-    }
-    let elp: NonNull<Expr> = el.into();
-    let erp: NonNull<Expr> = er.into();
-    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-        return;
-    }
-    let mask = el.var_mask | er.var_mask;
-    if !can_use_required_vars(mask, n) {
-        return;
-    }
-    let ol = &el.output;
-    let or = &er.output;
-    if USE_OR && el.prec() >= 3 && er.prec() > 3 && ok_before_keyword(el) && ok_after_keyword(er) {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Or, mask, vec_or(ol, or)),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_LE && el.prec() >= 5 && er.prec() > 5 {
-        save(
-            cn,
-            Expr::bin(elp, erp, Operator::Le, mask, vec_le(ol, or)),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if el.prec() >= 9 && er.prec() > 9 {
-        if USE_BIT_SHL {
-            if let Some(output) = vec_bit_shl(ol, or) {
-                save(
-                    cn,
-                    Expr::bin(elp, erp, Operator::BitShl, mask, output),
-                    n,
-                    cache,
-                    hashset_cache,
-                );
-            }
-        }
-        if USE_BIT_SHR {
-            if let Some(output) = vec_bit_shr(ol, or) {
-                save(
-                    cn,
-                    Expr::bin(elp, erp, Operator::BitShr, mask, output),
-                    n,
-                    cache,
-                    hashset_cache,
-                );
-            }
-        }
-    }
-    if USE_DIV2 && el.prec() >= 11 && er.prec() > 11 {
-        if let Some((div, _)) = divmod(ol, or) {
-            save(
-                cn,
-                Expr::bin(elp, erp, Operator::Div2, mask, div),
-                n,
-                cache,
-                hashset_cache,
-            );
-        }
-    }
-    if USE_EXP && el.prec() > 13 && er.prec() >= 13 {
-        if let Some(output) = vec_pow(ol, or) {
-            save(
-                cn,
-                Expr::bin(elp, erp, Operator::Exp, mask, output),
-                n,
-                cache,
-                hashset_cache,
-            );
-        }
-    }
-}
-
-fn find_3_byte_operators(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    hashset_cache: &HashSetCache,
-    n: usize,
-    el: &Expr,
-    er: &Expr,
-) {
-    if er.is_literal() && el.is_literal() {
-        return;
-    }
-    let elp: NonNull<Expr> = el.into();
-    let erp: NonNull<Expr> = er.into();
-    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-        return;
-    }
-    let mask = el.var_mask | er.var_mask;
-    if !can_use_required_vars(mask, n) {
-        return;
-    }
-    let ol = &el.output;
-    let or = &er.output;
-    if USE_OR && el.prec() >= 3 && er.prec() > 3 {
-        let z = vec_or(ol, or);
-        match (ok_before_keyword(el), ok_after_keyword(er)) {
-            (true, false) => save(
-                cn,
-                Expr::bin(elp, erp, Operator::OrSpace, mask, z),
-                n,
-                cache,
-                hashset_cache,
-            ),
-            (false, true) => save(
-                cn,
-                Expr::bin(elp, erp, Operator::SpaceOr, mask, z),
-                n,
-                cache,
-                hashset_cache,
-            ),
-            _ => {}
         }
     }
 }
@@ -363,22 +139,20 @@ fn find_binary_expressions_left(
     hashset_cache: &HashSetCache,
     n: usize,
     k: usize,
-    r: &Expr,
+    er: &Expr,
 ) {
-    for l in &cache[n - k - 1] {
-        find_1_byte_operators(cn, cache, hashset_cache, n, l, r);
-    }
-    if n < k + 3 {
-        return;
-    }
-    for l in &cache[n - k - 2] {
-        find_2_byte_operators(cn, cache, hashset_cache, n, l, r);
-    }
-    if n < k + 4 {
-        return;
-    }
-    for l in &cache[n - k - 3] {
-        find_3_byte_operators(cn, cache, hashset_cache, n, l, r);
+    for &op in BINARY_OPERATORS {
+        if k + op.length() >= n {
+            continue;
+        }
+        if !op.can_apply_right(er) {
+            continue;
+        }
+        for el in &cache[n - k - op.length()] {
+            if op.can_apply_left(el) {
+                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
+            }
+        }
     }
 }
 
@@ -388,22 +162,20 @@ fn find_binary_expressions_right(
     hashset_cache: &HashSetCache,
     n: usize,
     k: usize,
-    l: &Expr,
+    el: &Expr,
 ) {
-    for r in &cache[n - k - 1] {
-        find_1_byte_operators(cn, cache, hashset_cache, n, l, r);
-    }
-    if n < k + 3 {
-        return;
-    }
-    for r in &cache[n - k - 2] {
-        find_2_byte_operators(cn, cache, hashset_cache, n, l, r);
-    }
-    if n < k + 4 {
-        return;
-    }
-    for r in &cache[n - k - 3] {
-        find_3_byte_operators(cn, cache, hashset_cache, n, l, r);
+    for &op in BINARY_OPERATORS {
+        if k + op.length() >= n {
+            continue;
+        }
+        if !op.can_apply_left(el) {
+            continue;
+        }
+        for er in &cache[n - k - op.length()] {
+            if op.can_apply_right(er) {
+                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
+            }
+        }
     }
 }
 
@@ -417,27 +189,16 @@ fn find_unary_expression(
     if !can_use_required_vars(er.var_mask, n) {
         return;
     }
-    if er.prec() < 12 {
-        return;
-    }
-    let or = &er.output;
-    if USE_BIT_NEG {
-        save(
-            cn,
-            Expr::unary(er, Operator::BitNeg, !or.clone()),
-            n,
-            cache,
-            hashset_cache,
-        );
-    }
-    if USE_NEG {
-        save(
-            cn,
-            Expr::unary(er, Operator::Neg, -or.clone()),
-            n,
-            cache,
-            hashset_cache,
-        );
+    for &op in UNARY_OPERATORS {
+        if op.can_apply(er) {
+            save(
+                cn,
+                Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
+                n,
+                cache,
+                hashset_cache,
+            );
+        }
     }
 }
 

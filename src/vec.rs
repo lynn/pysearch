@@ -1,6 +1,6 @@
-use std::ops::{Deref, DerefMut, RangeBounds};
+use std::ops::{Deref, DerefMut};
 
-use crate::params::{Num, C_STYLE_BIT_SHIFT, C_STYLE_MOD, GOAL};
+use crate::params::{Num, GOAL};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vector([Num; GOAL.len()]);
@@ -15,7 +15,7 @@ impl Vector {
     }
 
     #[inline]
-    pub fn map(mut self, function: fn(Num) -> Num) -> Vector {
+    pub fn map(mut self, function: impl Fn(Num) -> Num) -> Vector {
         for x in &mut self.0.iter_mut() {
             *x = function(*x)
         }
@@ -79,96 +79,3 @@ impl_op!(Shl, shl, <<=);
 impl_op!(Shr, shr, >>=);
 impl_unary!(Not, not, !);
 impl_unary!(Neg, neg, (|x| 0 - x));
-
-pub fn divmod(left: &Vector, right: &Vector) -> Option<(Vector, Vector)> {
-    let mut div = left.clone();
-    let mut modulo = left.clone();
-    for ((d, m), y) in div.iter_mut().zip(modulo.iter_mut()).zip(right.iter()) {
-        if C_STYLE_MOD {
-            *d = d.checked_div(*y)?;
-            *m %= *y;
-        } else {
-            if *y == 0 || (Num::MIN < 0 && *d == Num::MIN && *y == !0) {
-                return None;
-            }
-            (*d, *m) = num_integer::div_mod_floor(*d, *y);
-        }
-    }
-    Some((div, modulo))
-}
-
-pub fn vec_or(left: &Vector, right: &Vector) -> Vector {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        if *x == 0 {
-            *x = *y;
-        }
-    }
-    left
-}
-
-pub fn vec_eq(left: &Vector, right: &Vector) -> Vector {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = (*x == *y) as Num;
-    }
-    left
-}
-
-pub fn vec_lt(left: &Vector, right: &Vector) -> Vector {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = (*x < *y) as Num;
-    }
-    left
-}
-
-pub fn vec_le(left: &Vector, right: &Vector) -> Vector {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = (*x <= *y) as Num;
-    }
-    left
-}
-
-pub fn vec_gcd(left: &Vector, right: &Vector) -> Vector {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = num_integer::gcd(*x, *y);
-    }
-    left
-}
-
-pub fn vec_pow(left: &Vector, right: &Vector) -> Option<Vector> {
-    let mut left = left.clone();
-    for (x, y) in left.iter_mut().zip(right.iter()) {
-        *x = (*x).checked_pow((*y).try_into().ok()?)?;
-    }
-    Some(left)
-}
-
-pub fn vec_bit_shl(left: &Vector, right: &Vector) -> Option<Vector> {
-    if C_STYLE_BIT_SHIFT || vec_in(right, 0..Num::BITS as Num) {
-        Some(left.clone() << right)
-    } else {
-        None
-    }
-}
-
-pub fn vec_bit_shr(left: &Vector, right: &Vector) -> Option<Vector> {
-    if C_STYLE_BIT_SHIFT {
-        Some(left.clone() >> right)
-    } else if vec_in(right, 0..) {
-        let mut result = left.clone();
-        for (x, y) in result.iter_mut().zip(right.iter()) {
-            *x >>= std::cmp::min(*y, Num::BITS as Num - 1);
-        }
-        Some(result)
-    } else {
-        None
-    }
-}
-
-pub fn vec_in<R: RangeBounds<Num>>(vec: &Vector, bounds: R) -> bool {
-    vec.iter().all(|x| bounds.contains(x))
-}
