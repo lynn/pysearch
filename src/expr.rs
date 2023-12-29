@@ -122,6 +122,46 @@ impl PartialEq for Expr {
     }
 }
 
+#[derive(Eq, Clone, Copy)]
+pub struct NonNullExpr(NonNull<Expr>);
+unsafe impl Send for NonNullExpr {}
+unsafe impl Sync for NonNullExpr {}
+
+impl NonNullExpr {
+    pub fn as_ptr(&self) -> *const Expr {
+        self.0.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut Expr {
+        self.0.as_ptr() as *mut Expr
+    }
+}
+
+impl Into<NonNullExpr> for &Expr {
+    fn into(self) -> NonNullExpr {
+        let non_null = NonNull::new(self as *const Expr as *mut Expr).unwrap();
+        NonNullExpr(non_null)
+    }
+}
+
+impl AsRef<Expr> for NonNullExpr {
+    fn as_ref(&self) -> &Expr {
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl Hash for NonNullExpr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
+    }
+}
+
+impl PartialEq for NonNullExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
 // "3or" and ")or" are valid, but "nor" isn't.
 pub fn ok_before_keyword(e: &Expr) -> bool {
     match e.right {
