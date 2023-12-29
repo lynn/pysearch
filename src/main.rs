@@ -494,24 +494,24 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
 
 fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usize) {
     let mut idx = 0;
-    let start_ptr = cn.as_ptr();
     cn.shrink_to_fit();
-    for i in 0..cn.len() {
-        cn[idx] = cn[i].clone();
+    let start_ptr = cn.as_ptr();
+    while idx < cn.len() {
         let expr = &cn[idx];
-        let expr_ptr: NonNullExpr = expr.into();
-        match hashset_cache.entry(expr_ptr) {
+        match hashset_cache.entry(expr.into()) {
             Entry::Occupied(e) => {
                 let oe = e.get();
-                if expr_ptr.as_ref().prec() > oe.as_ref().prec() {
+                if expr.prec() > oe.as_ref().prec() {
                     if oe.as_ptr() >= start_ptr && oe.as_ptr() < unsafe { start_ptr.add(idx) } {
                         unsafe {
-                            *(oe.as_ptr() as *mut Expr) = expr_ptr.as_ref().clone();
-                        };
+                            *oe.as_mut_ptr() = cn.swap_remove(idx);
+                        }
                     } else {
                         e.replace();
                         idx += 1;
                     }
+                } else {
+                    cn.swap_remove(idx);
                 }
             }
             Entry::Vacant(e) => {
@@ -520,7 +520,6 @@ fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashS
             }
         }
     }
-    cn.truncate(idx);
     cn.shrink_to_fit();
     cache.push(cn);
     if n == std::cmp::min(MAX_CACHE_LENGTH, MAX_LENGTH - 1) {
@@ -533,7 +532,7 @@ fn find_expressions_multithread(
     mut_hashset_cache: &mut HashSetCache,
     n: usize,
 ) {
-    use rayon::{iter::Either, prelude::*};
+    use rayon::prelude::*;
 
     let cache = &mut_cache;
     let hashset_cache = &mut_hashset_cache;
@@ -541,15 +540,7 @@ fn find_expressions_multithread(
     let mut cn = (1..n - 1)
         .into_par_iter()
         .flat_map(|k| {
-            // Use `par_bridge` for more parallelism when there're not enough
-            // items in the map.
-            // https://github.com/rust-lang/hashbrown/issues/383
-            if k <= 2 {
-                Either::Left(cache[k].iter().par_bridge())
-            } else {
-                Either::Right(cache[k].par_iter())
-            }
-            .map(move |r| {
+            cache[k].par_iter().map(move |r| {
                 let mut cn = CacheLevel::new();
                 find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
                 cn
@@ -565,18 +556,8 @@ fn find_expressions_multithread(
             find_unary_expressions(&mut cn, cache, hashset_cache, n);
             cn
         }))
-        .reduce(
-            || CacheLevel::new(),
-            |mut level, mut level2| {
-                if level.len() < level2.len() {
-                    std::mem::swap(&mut level, &mut level2);
-                }
-                for expr in level2 {
-                    level.push(expr);
-                }
-                level
-            },
-        );
+        .flatten_iter()
+        .collect();
 
     find_variables_and_literals(&mut cn, n);
 

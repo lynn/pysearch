@@ -9,7 +9,7 @@ use crate::{
 
 pub type Mask = u8;
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
@@ -110,18 +110,6 @@ impl Display for Expr {
     }
 }
 
-impl Hash for Expr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.output.hash(state);
-    }
-}
-
-impl PartialEq for Expr {
-    fn eq(&self, other: &Self) -> bool {
-        return self.output == other.output;
-    }
-}
-
 #[derive(Eq, Clone, Copy)]
 pub struct NonNullExpr(NonNull<Expr>);
 unsafe impl Send for NonNullExpr {}
@@ -132,15 +120,14 @@ impl NonNullExpr {
         self.0.as_ptr()
     }
 
-    pub fn as_mut_ptr(&mut self) -> *mut Expr {
-        self.0.as_ptr() as *mut Expr
+    pub fn as_mut_ptr(&self) -> *mut Expr {
+        self.0.as_ptr()
     }
 }
 
 impl Into<NonNullExpr> for &Expr {
     fn into(self) -> NonNullExpr {
-        let non_null = NonNull::new(self as *const Expr as *mut Expr).unwrap();
-        NonNullExpr(non_null)
+        NonNullExpr(self.into())
     }
 }
 
@@ -152,13 +139,13 @@ impl AsRef<Expr> for NonNullExpr {
 
 impl Hash for NonNullExpr {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().hash(state);
+        self.as_ref().output.hash(state);
     }
 }
 
 impl PartialEq for NonNullExpr {
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref() == other.as_ref()
+        self.as_ref().output == other.as_ref().output
     }
 }
 
