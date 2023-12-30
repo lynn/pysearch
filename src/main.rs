@@ -11,12 +11,13 @@ pub mod params;
 pub mod vec;
 
 use expr::{Expr, Mask, NonNullExpr};
-use operator::{BinaryOperator, Operator};
+use operator::Operator;
 use params::*;
 
 use vec::Vector;
 
 use hashbrown::{hash_set::Entry, HashMap, HashSet};
+use seq_macro::seq;
 use std::time::Instant;
 
 // cache[length][output] = highest-prec expression of that length yielding that output
@@ -84,7 +85,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
             find_binary_expressions_right(level, cache, hashset_cache, dfs_len, n, &expr);
         }
         if n + 1 <= MAX_LENGTH {
-            find_unary_expression(level, cache, hashset_cache, n + 1, &expr);
+            find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
         if n + 2 < MAX_LENGTH && expr.op < Operator::Parens {
             save(
@@ -101,14 +102,15 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
     level.push(expr);
 }
 
-fn apply_binary_operator(
+#[inline(always)]
+fn find_binary_operators(
     cn: &mut CacheLevel,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
     el: &Expr,
     er: &Expr,
-    op: BinaryOperator,
+    op_len: usize,
 ) {
     if er.is_literal() && el.is_literal() {
         return;
@@ -120,17 +122,21 @@ fn apply_binary_operator(
     if !can_use_required_vars(mask, n) {
         return;
     }
-    if op.can_apply(el, er) {
-        if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-            save(
-                cn,
-                Expr::bin(el.into(), er.into(), op.into(), mask, output),
-                n,
-                cache,
-                hashset_cache,
-            );
+    seq!(op_idx in 0..100 {
+        if let Some(&op) = BINARY_OPERATORS.get(op_idx) {
+            if op.length() == op_len && op.can_apply(el, er) {
+                if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    save(
+                        cn,
+                        Expr::bin(el.into(), er.into(), op.into(), mask, output),
+                        n,
+                        cache,
+                        hashset_cache,
+                    );
+                }
+            }
         }
-    }
+    });
 }
 
 fn find_binary_expressions_left(
@@ -141,19 +147,14 @@ fn find_binary_expressions_left(
     k: usize,
     er: &Expr,
 ) {
-    for &op in BINARY_OPERATORS {
-        if k + op.length() >= n {
-            continue;
+    seq!(op_len in 1..=3 {
+        if n <= k + op_len {
+            return;
+        };
+        for el in &cache[n - k - op_len] {
+            find_binary_operators(cn, cache, hashset_cache, n, el, er, op_len);
         }
-        if !op.can_apply_right(er) {
-            continue;
-        }
-        for el in &cache[n - k - op.length()] {
-            if op.can_apply_left(el) {
-                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
-            }
-        }
-    }
+    });
 }
 
 fn find_binary_expressions_right(
@@ -164,22 +165,17 @@ fn find_binary_expressions_right(
     k: usize,
     el: &Expr,
 ) {
-    for &op in BINARY_OPERATORS {
-        if k + op.length() >= n {
-            continue;
+    seq!(op_len in 1..=3 {
+        if n <= k + op_len {
+            return;
+        };
+        for er in &cache[n - k - op_len] {
+            find_binary_operators(cn, cache, hashset_cache, n, el, er, op_len);
         }
-        if !op.can_apply_left(el) {
-            continue;
-        }
-        for er in &cache[n - k - op.length()] {
-            if op.can_apply_right(er) {
-                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
-            }
-        }
-    }
+    });
 }
 
-fn find_unary_expression(
+fn find_unary_operators(
     cn: &mut CacheLevel,
     cache: &Cache,
     hashset_cache: &HashSetCache,
@@ -209,7 +205,7 @@ fn find_unary_expressions(
     n: usize,
 ) {
     for r in &cache[n - 1] {
-        find_unary_expression(cn, cache, hashset_cache, n, r);
+        find_unary_operators(cn, cache, hashset_cache, n, r);
     }
 }
 

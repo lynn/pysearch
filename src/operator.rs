@@ -74,6 +74,7 @@ impl Display for Operator {
 }
 
 impl From<UnaryOperator> for Operator {
+    #[inline]
     fn from(op: UnaryOperator) -> Self {
         match op {
             UnaryOperator::Neg => Operator::Neg,
@@ -83,6 +84,7 @@ impl From<UnaryOperator> for Operator {
 }
 
 impl From<BinaryOperator> for Operator {
+    #[inline]
     fn from(op: BinaryOperator) -> Self {
         use BinaryOperator::*;
         match op {
@@ -125,6 +127,7 @@ impl UnaryOperator {
         er.prec() >= 12
     }
 
+    #[inline]
     pub fn apply(&self, x: Num) -> Num {
         match self {
             UnaryOperator::Neg => 0 - x,
@@ -132,6 +135,7 @@ impl UnaryOperator {
         }
     }
 
+    #[inline]
     pub fn vec_apply(&self, v: Vector) -> Vector {
         v.map(|x| self.apply(x))
     }
@@ -165,6 +169,7 @@ pub enum BinaryOperator {
 }
 
 impl BinaryOperator {
+    #[inline]
     pub fn length(&self) -> usize {
         use BinaryOperator::*;
         match self {
@@ -176,54 +181,41 @@ impl BinaryOperator {
     }
 
     #[inline]
-    pub fn can_apply_left(&self, el: &Expr) -> bool {
-        use BinaryOperator::*;
-
-        match self {
-            Or | SpaceOr => el.prec() >= 3 && ok_before_keyword(el),
-            OrSpace | SpaceOrSpace => el.prec() >= 3 && ok_before_keyword(el),
-            Lt | Le | Gt | Ge | Eq | Ne => el.prec() >= 5,
-            BitOr => el.prec() >= 6,
-            BitXor => el.prec() >= 7,
-            BitAnd => el.prec() >= 8,
-            BitShl | BitShr => el.prec() >= 9,
-            Add | Sub => el.prec() >= 10,
-            Mul | Mod | Div1 | Div2 | Gcd => el.prec() >= 11,
-            Exp => el.prec() > 13,
-        }
-    }
-
-    #[inline]
-    pub fn can_apply_right(&self, er: &Expr) -> bool {
-        use BinaryOperator::*;
-
-        match self {
-            Or | SpaceOr => er.prec() > 3 && ok_after_keyword(er),
-            OrSpace | SpaceOrSpace => er.prec() > 3 && !ok_after_keyword(er),
-            Lt | Le | Gt | Ge | Eq | Ne => er.prec() > 5,
-            BitOr => er.prec() >= 6,
-            BitXor => er.prec() >= 7,
-            BitAnd => er.prec() >= 8,
-            BitShl | BitShr => er.prec() > 9,
-            Add => er.prec() >= 10,
-            Sub => er.prec() > 10,
-            Mul | Mod | Div1 | Div2 | Gcd => er.prec() > 11,
-            Exp => er.prec() >= 13,
-        }
-    }
-
-    #[inline]
     pub fn can_apply(&self, el: &Expr, er: &Expr) -> bool {
         use BinaryOperator::*;
 
+        // For commutative operators, choose an arbitrary order for the two operands based on memory
+        // address.
+        let use_commutative_op =
+            |prec| el.prec() >= prec && er.prec() >= prec && el as *const Expr <= er as *const Expr;
         match self {
-            Or | SpaceOr | OrSpace | SpaceOrSpace | Lt | Le | Gt | Ge | Eq | Ne | BitShl
-            | BitShr | Sub | Mod | Div1 | Div2 | Gcd | Exp => true,
-            BitOr | BitXor | BitAnd | Add => el as *const Expr <= er as *const Expr,
-            Mul => el.prec() == 11 || el as *const Expr <= er as *const Expr,
+            Or => el.prec() >= 3 && er.prec() > 3 && ok_before_keyword(el) && ok_after_keyword(er),
+            SpaceOr => {
+                el.prec() >= 3 && er.prec() > 3 && !ok_before_keyword(el) && ok_after_keyword(er)
+            }
+            OrSpace => {
+                el.prec() >= 3 && er.prec() > 3 && ok_before_keyword(el) && !ok_after_keyword(er)
+            }
+            SpaceOrSpace => {
+                el.prec() >= 3 && er.prec() > 3 && !ok_before_keyword(el) && !ok_after_keyword(er)
+            }
+            Lt | Le | Gt | Ge | Eq | Ne => el.prec() >= 5 && er.prec() > 5,
+            BitOr => use_commutative_op(6),
+            BitXor => use_commutative_op(7),
+            BitAnd => use_commutative_op(8),
+            BitShl | BitShr => el.prec() >= 9 && er.prec() > 9,
+            Add => use_commutative_op(10),
+            Sub => el.prec() >= 10 && er.prec() > 10,
+            Mul => {
+                er.prec() > 11
+                    && (el.prec() > 11 && el as *const Expr <= er as *const Expr || el.prec() == 11)
+            }
+            Mod | Div1 | Div2 | Gcd => el.prec() >= 11 && er.prec() > 11,
+            Exp => el.prec() > 13 && er.prec() >= 13,
         }
     }
 
+    #[inline]
     pub fn apply(&self, x: Num, y: Num) -> Option<Num> {
         use BinaryOperator::*;
         match self {
@@ -246,7 +238,7 @@ impl BinaryOperator {
             }
             BitShr => {
                 if C_STYLE_BIT_SHIFT {
-                    Some(x << y)
+                    Some(x >> y)
                 } else if y >= 0 {
                     Some(x >> y.min(Num::BITS as Num - 1))
                 } else {
@@ -281,6 +273,7 @@ impl BinaryOperator {
         }
     }
 
+    #[inline]
     pub fn vec_apply(&self, mut left: Vector, right: &Vector) -> Option<Vector> {
         for (x, y) in left.iter_mut().zip(right.iter()) {
             *x = self.apply(*x, *y)?;
