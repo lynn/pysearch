@@ -494,7 +494,6 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
 
 fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usize) {
     let mut idx = 0;
-    cn.shrink_to_fit();
     let start_ptr = cn.as_ptr();
     while idx < cn.len() {
         let expr = &cn[idx];
@@ -516,6 +515,9 @@ fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashS
             }
             Entry::Vacant(e) => {
                 e.insert();
+                if hashset_cache.len() == hashset_cache.capacity() {
+                    cn.shrink_to_fit();
+                }
                 idx += 1;
             }
         }
