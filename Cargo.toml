@@ -8,6 +8,9 @@ edition = "2021"
 [profile.dev]
 overflow-checks = false
 
+[profile.release]
+opt-level = 3
+
 [features]
 simd = []
 
@@ -15,6 +18,7 @@ simd = []
 rayon = "1.7.0"
 hashbrown = { version = "0.14.0" }
 num-integer = "0.1.45"
+seq-macro = "0.3"
 
 # Doesn't seem to help much:
 # [profile.release]

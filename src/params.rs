@@ -1,4 +1,8 @@
-use crate::{expr::Expr, vec::Vector};
+use crate::{
+    expr::Expr,
+    operator::{BinaryOperator, BinaryOperator::*, UnaryOperator, UnaryOperator::*},
+    vec::Vector,
+};
 
 pub type Num = i32;
 
@@ -39,24 +43,38 @@ pub const LITERALS: &[Num] = &[
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
 pub const MAX_LITERAL: Num = 0;
 
-pub const USE_OR: bool = true;
-pub const USE_LT: bool = true;
-pub const USE_LE: bool = true;
-pub const USE_BIT_OR: bool = true;
-pub const USE_BIT_XOR: bool = true;
-pub const USE_BIT_AND: bool = true;
-pub const USE_BIT_SHL: bool = true;
-pub const USE_BIT_SHR: bool = true;
-pub const USE_BIT_NEG: bool = true;
-pub const USE_ADD: bool = true;
-pub const USE_SUB: bool = true;
-pub const USE_MUL: bool = true;
-pub const USE_MOD: bool = true;
-pub const USE_DIV1: bool = false; /* / */
-pub const USE_DIV2: bool = true; /* // */
-pub const USE_GCD: bool = false;
-pub const USE_NEG: bool = true;
-pub const USE_EXP: bool = true;
+#[rustfmt::skip]
+pub const BINARY_OPERATORS: &[BinaryOperator] = &[
+    Or,
+    SpaceOr,
+    OrSpace,
+    // SpaceOrSpace,
+    Lt,
+    Le,
+    // Gt,
+    // Ge,
+    // Eq,
+    // Ne,
+    BitOr,
+    BitXor,
+    BitAnd,
+    BitShl,
+    BitShr,
+    Add,
+    Sub,
+    Mul,
+    Mod,
+    // Div1,
+    Div2,
+    // Gcd,
+    Exp,
+];
+
+#[rustfmt::skip]
+pub const UNARY_OPERATORS: &[UnaryOperator] = &[
+    BitNeg,
+    Neg
+];
 
 /// Use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8).
 pub const C_STYLE_MOD: bool = false;
