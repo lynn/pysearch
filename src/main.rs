@@ -185,17 +185,19 @@ fn find_unary_operators(
     if !can_use_required_vars(er.var_mask, n) {
         return;
     }
-    for &op in UNARY_OPERATORS {
-        if op.can_apply(er) {
-            save(
-                cn,
-                Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
-                n,
-                cache,
-                hashset_cache,
-            );
+    seq!(op_idx in 0..10 {
+        if let Some(&op) = UNARY_OPERATORS.get(op_idx) {
+            if op.can_apply(er) {
+                save(
+                    cn,
+                    Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
+                    n,
+                    cache,
+                    hashset_cache,
+                );
+            }
         }
-    }
+    });
 }
 
 fn find_unary_expressions(
