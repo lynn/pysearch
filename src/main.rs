@@ -11,7 +11,7 @@ pub mod params;
 pub mod vec;
 
 use expr::{Expr, Mask, NonNullExpr};
-use operator::Operator;
+use operator::OpKind;
 use params::*;
 
 use vec::Vector;
@@ -87,7 +87,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
-        if n + 2 < MAX_LENGTH && expr.op < Operator::Parens {
+        if n + 2 < MAX_LENGTH && expr.op < OpKind::Parens {
             save(
                 level,
                 Expr::parens((&expr).into()),
@@ -124,11 +124,11 @@ fn find_binary_operators(
     }
     seq!(op_idx in 0..100 {
         if let Some(&op) = BINARY_OPERATORS.get(op_idx) {
-            if op.length() == op_len && op.can_apply(el, er) {
+            if op.name.len() == op_len && op.can_apply(el, er) {
                 if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                     save(
                         cn,
-                        Expr::bin(el.into(), er.into(), op.into(), mask, output),
+                        Expr::bin(el.into(), er.into(), op.kind, mask, output),
                         n,
                         cache,
                         hashset_cache,
@@ -190,7 +190,7 @@ fn find_unary_operators(
             if op.can_apply(er) {
                 save(
                     cn,
-                    Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
+                    Expr::unary(er, op.kind, op.vec_apply(er.output.clone())),
                     n,
                     cache,
                     hashset_cache,
@@ -221,7 +221,7 @@ fn find_parens_expressions(
         if !can_use_required_vars(er.var_mask, n) {
             return;
         }
-        if er.op < Operator::Parens {
+        if er.op < OpKind::Parens {
             if n <= MAX_CACHE_LENGTH {
                 cn.push(Expr::parens(er));
             } else {

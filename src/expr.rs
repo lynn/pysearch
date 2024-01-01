@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::{fmt::Display, ptr::NonNull};
 
 use crate::{
-    operator::Operator,
+    operator::OpKind,
     params::{Num, INPUTS},
     vec::Vector,
 };
@@ -13,7 +13,7 @@ pub type Mask = u8;
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
-    pub op: Operator,
+    pub op: OpKind,
     pub var_mask: Mask,
     pub output: Vector,
 }
@@ -22,14 +22,14 @@ unsafe impl Sync for Expr {}
 
 impl Expr {
     pub fn prec(&self) -> u8 {
-        self.op as u8 >> 4
+        self.op.prec()
     }
 
     pub fn variable(index: usize, output: Vector) -> Self {
         Self {
             left: None,
             right: None,
-            op: Operator::Variable,
+            op: OpKind::Variable,
             var_mask: 1 << index,
             output,
         }
@@ -39,7 +39,7 @@ impl Expr {
         Self {
             left: None,
             right: None,
-            op: Operator::Literal,
+            op: OpKind::Literal,
             var_mask: 0,
             output: Vector::constant(value),
         }
@@ -52,7 +52,7 @@ impl Expr {
     pub fn bin(
         el: NonNull<Expr>,
         er: NonNull<Expr>,
-        op: Operator,
+        op: OpKind,
         var_mask: Mask,
         output: Vector,
     ) -> Self {
@@ -65,7 +65,7 @@ impl Expr {
         }
     }
 
-    pub fn unary(er: &Expr, op: Operator, output: Vector) -> Self {
+    pub fn unary(er: &Expr, op: OpKind, output: Vector) -> Self {
         Self {
             left: None,
             right: Some(er.into()),
@@ -79,7 +79,7 @@ impl Expr {
         Self {
             left: None,
             right: Some(er.into()),
-            op: Operator::Parens,
+            op: OpKind::Parens,
             var_mask: er.var_mask,
             output: er.output.clone(),
         }
@@ -94,10 +94,10 @@ impl Display for Expr {
         Display::fmt(&self.op, f)?;
         if let Some(right) = self.right {
             Self::fmt(unsafe { right.as_ref() }, f)?;
-            if self.op == Operator::Parens {
+            if self.op == OpKind::Parens {
                 write!(f, ")")?;
             }
-        } else if self.op == Operator::Variable {
+        } else if self.op == OpKind::Variable {
             write!(
                 f,
                 "{}",
@@ -152,15 +152,15 @@ impl PartialEq for NonNullExpr {
 // "3or" and ")or" are valid, but "nor" isn't.
 pub fn ok_before_keyword(e: &Expr) -> bool {
     match e.right {
-        None => e.op == Operator::Literal,
-        Some(right) => e.op == Operator::Parens || ok_before_keyword(unsafe { right.as_ref() }),
+        None => e.op == OpKind::Literal,
+        Some(right) => e.op == OpKind::Parens || ok_before_keyword(unsafe { right.as_ref() }),
     }
 }
 
 // "or3", "orn" are invalid. Need a unary op or parens.
 pub fn ok_after_keyword(e: &Expr) -> bool {
     match e.left {
-        None => e.op != Operator::Literal && e.op != Operator::Variable,
+        None => e.op != OpKind::Literal && e.op != OpKind::Variable,
         Some(left) => ok_after_keyword(unsafe { left.as_ref() }),
     }
 }
