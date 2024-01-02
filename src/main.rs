@@ -11,7 +11,7 @@ pub mod params;
 pub mod vec;
 
 use expr::{Expr, Mask, NonNullExpr};
-use operator::OpKind;
+use operator::*;
 use params::*;
 
 use vec::Vector;
@@ -87,7 +87,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
-        if n + 2 < MAX_LENGTH && expr.op < OpKind::Parens {
+        if n + 2 < MAX_LENGTH && expr.op_idx < OP_INDEX_PARENS {
             save(
                 level,
                 Expr::parens((&expr).into()),
@@ -122,13 +122,14 @@ fn find_binary_operators(
     if !can_use_required_vars(mask, n) {
         return;
     }
-    seq!(op_idx in 0..100 {
-        if let Some(&op) = BINARY_OPERATORS.get(op_idx) {
+    seq!(idx in 0..100 {
+        if let Some(&op) = BINARY_OPERATORS.get(idx) {
             if op.name.len() == op_len && op.can_apply(el, er) {
                 if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    let op_idx: OpIndex = (idx + UNARY_OPERATORS.len()) as OpIndex;
                     save(
                         cn,
-                        Expr::bin(el.into(), er.into(), op.kind, mask, output),
+                        Expr::bin(el.into(), er.into(), op_idx, mask, output),
                         n,
                         cache,
                         hashset_cache,
@@ -190,7 +191,7 @@ fn find_unary_operators(
             if op.can_apply(er) {
                 save(
                     cn,
-                    Expr::unary(er, op.kind, op.vec_apply(er.output.clone())),
+                    Expr::unary(er, op_idx, op.vec_apply(er.output.clone())),
                     n,
                     cache,
                     hashset_cache,
@@ -221,7 +222,7 @@ fn find_parens_expressions(
         if !can_use_required_vars(er.var_mask, n) {
             return;
         }
-        if er.op < OpKind::Parens {
+        if er.op_idx < OP_INDEX_PARENS {
             if n <= MAX_CACHE_LENGTH {
                 cn.push(Expr::parens(er));
             } else {

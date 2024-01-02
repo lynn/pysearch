@@ -39,6 +39,13 @@ pub const LITERALS: &[Num] = &[
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
 pub const MAX_LITERAL: Num = 0;
 
+/// To use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8),
+/// change `OP_MOD` to `BinaryOp { apply: apply_trunc_mod, ..OP_MOD }` and
+///        `OP_DIV` to `BinaryOp { apply: apply_trunc_div, ..OP_DIV }`
+///
+/// To use C-style bit shift (1 >> 32 == 1) rather than Python style (1 >> 32 == 0),
+/// change `OP_BIT_SHL` to `BinaryOp { apply: apply_bit_shl, ..OP_BIT_SHL }` and
+///        `OP_BIT_SHR` to `BinaryOp { apply: apply_bit_shr, ..OP_BIT_SHR }` and
 #[rustfmt::skip]
 pub const BINARY_OPERATORS: &[BinaryOp] = &[
     OP_OR,
@@ -70,12 +77,6 @@ pub const UNARY_OPERATORS: &[UnaryOp] = &[
     OP_BIT_NEG,
     OP_NEG,
 ];
-
-/// Use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8).
-pub const C_STYLE_MOD: bool = false;
-
-/// Use C-style bit shift (1 >> 32 == 1) rather than Python style (1 >> 32 == 0).
-pub const C_STYLE_BIT_SHIFT: bool = false;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
