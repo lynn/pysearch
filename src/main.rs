@@ -249,14 +249,10 @@ fn find_parens_expressions(
     }
     for er in &cache[n - 2] {
         if !can_use_required_vars(er.var_mask, n) {
-            return;
+            continue;
         }
         if er.op < Operator::Parens {
-            if n <= MAX_CACHE_LENGTH {
-                cn.push(Expr::parens(er));
-            } else {
-                save(cn, Expr::parens(er), n, cache, hashset_cache);
-            }
+            save(cn, Expr::parens(er), n, cache, hashset_cache);
         }
     }
 }
