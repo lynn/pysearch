@@ -73,6 +73,13 @@ impl Display for Operator {
     }
 }
 
+impl Operator {
+    #[inline]
+    pub fn prec(self) -> u8 {
+        self as u8 >> 4
+    }
+}
+
 impl From<UnaryOperator> for Operator {
     #[inline]
     fn from(op: UnaryOperator) -> Self {
@@ -122,9 +129,11 @@ pub enum UnaryOperator {
 }
 
 impl UnaryOperator {
+    pub const PREC: u8 = 12;
+
     #[inline]
     pub fn can_apply(&self, er: &Expr) -> bool {
-        er.prec() >= 12
+        er.prec() >= UnaryOperator::PREC
     }
 
     #[inline]

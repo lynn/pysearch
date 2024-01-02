@@ -22,7 +22,7 @@ unsafe impl Sync for Expr {}
 
 impl Expr {
     pub fn prec(&self) -> u8 {
-        self.op as u8 >> 4
+        self.op.prec()
     }
 
     pub fn variable(index: usize, output: Vector) -> Self {
