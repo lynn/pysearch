@@ -11,7 +11,7 @@ pub mod params;
 pub mod vec;
 
 use expr::{Expr, Mask, NonNullExpr};
-use operator::Operator;
+use operator::{Operator, UnaryOperator};
 use params::*;
 
 use vec::Vector;
@@ -39,12 +39,10 @@ fn can_use_required_vars(mask: u8, length: usize) -> bool {
     !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
 }
 
-fn unit_if(b: bool) -> Option<()> {
-    if b {
-        Some(())
-    } else {
-        None
-    }
+fn is_leaf_expr(op: Operator, length: usize) -> bool {
+    length == MAX_LENGTH
+        || length == MAX_LENGTH - 1
+            && (UNARY_OPERATORS.len() == 0 || op.prec() < UnaryOperator::PREC)
 }
 
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
@@ -55,7 +53,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    if n == MAX_LENGTH || n == MAX_LENGTH - 1 && expr.prec() < 12 {
+    if !MATCH_1BY1 && is_leaf_expr(expr.op, n) {
         return;
     }
 
@@ -87,7 +85,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
-        if n + 2 < MAX_LENGTH && expr.op < Operator::Parens {
+        if !is_leaf_expr(Operator::Parens, n + 2) && expr.op < Operator::Parens {
             save(
                 level,
                 Expr::parens((&expr).into()),
@@ -125,14 +123,29 @@ fn find_binary_operators(
     seq!(op_idx in 0..100 {
         if let Some(&op) = BINARY_OPERATORS.get(op_idx) {
             if op.length() == op_len && op.can_apply(el, er) {
-                if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-                    save(
-                        cn,
-                        Expr::bin(el.into(), er.into(), op.into(), mask, output),
-                        n,
-                        cache,
-                        hashset_cache,
-                    );
+                if MATCH_1BY1 && is_leaf_expr(op.into(), n) {
+                    if el
+                        .output
+                        .iter()
+                        .zip(er.output.iter())
+                        .enumerate()
+                        .all(|(i, (&ol, &or))| match op.apply(ol, or) {
+                            Some(o) => match_one(i, o),
+                            None => false,
+                        })
+                    {
+                        println!("{}{}{}", el, Operator::from(op), er);
+                    }
+                } else {
+                    if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                        save(
+                            cn,
+                            Expr::bin(el.into(), er.into(), op.into(), mask, output),
+                            n,
+                            cache,
+                            hashset_cache,
+                        );
+                    }
                 }
             }
         }
@@ -188,13 +201,24 @@ fn find_unary_operators(
     seq!(op_idx in 0..10 {
         if let Some(&op) = UNARY_OPERATORS.get(op_idx) {
             if op.can_apply(er) {
-                save(
-                    cn,
-                    Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
-                    n,
-                    cache,
-                    hashset_cache,
-                );
+                if MATCH_1BY1 && is_leaf_expr(op.into(), n) {
+                    if er
+                        .output
+                        .iter()
+                        .enumerate()
+                        .all(|(i, &or)| match_one(i, op.apply(or)))
+                    {
+                        println!("{}{}", Operator::from(op), er);
+                    }
+                } else {
+                    save(
+                        cn,
+                        Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
+                        n,
+                        cache,
+                        hashset_cache,
+                    );
+                }
             }
         }
     });
@@ -206,6 +230,9 @@ fn find_unary_expressions(
     hashset_cache: &HashSetCache,
     n: usize,
 ) {
+    if n < 2 {
+        return;
+    }
     for r in &cache[n - 1] {
         find_unary_operators(cn, cache, hashset_cache, n, r);
     }
@@ -217,6 +244,9 @@ fn find_parens_expressions(
     hashset_cache: &HashSetCache,
     n: usize,
 ) {
+    if n < 4 || is_leaf_expr(Operator::Parens, n) {
+        return;
+    }
     for er in &cache[n - 2] {
         if !can_use_required_vars(er.var_mask, n) {
             return;
@@ -251,7 +281,7 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     }
 }
 
-fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usize) {
+fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashSetCache) {
     let mut idx = 0;
     let start_ptr = cn.as_ptr();
     while idx < cn.len() {
@@ -283,9 +313,7 @@ fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashS
     }
     cn.shrink_to_fit();
     cache.push(cn);
-    if n == std::cmp::min(MAX_CACHE_LENGTH, MAX_LENGTH - 1) {
-        hashset_cache.shrink_to_fit();
-    }
+    hashset_cache.shrink_to_fit();
 }
 
 fn find_expressions_multithread(
@@ -307,39 +335,41 @@ fn find_expressions_multithread(
                 cn
             })
         })
-        .chain(unit_if(n >= 3 && n < MAX_LENGTH).into_par_iter().map(|()| {
-            let mut cn = CacheLevel::new();
-            find_parens_expressions(&mut cn, cache, hashset_cache, n);
-            cn
-        }))
-        .chain(unit_if(n >= 2).into_par_iter().map(|()| {
-            let mut cn = CacheLevel::new();
-            find_unary_expressions(&mut cn, cache, hashset_cache, n);
-            cn
-        }))
+        .chain(
+            std::iter::once_with(|| {
+                let mut cn = CacheLevel::new();
+                find_parens_expressions(&mut cn, cache, hashset_cache, n);
+                cn
+            })
+            .par_bridge(),
+        )
+        .chain(
+            std::iter::once_with(|| {
+                let mut cn = CacheLevel::new();
+                find_unary_expressions(&mut cn, cache, hashset_cache, n);
+                cn
+            })
+            .par_bridge(),
+        )
         .flatten_iter()
         .collect();
 
     find_variables_and_literals(&mut cn, n);
 
-    add_to_cache(cn, mut_cache, mut_hashset_cache, n);
+    add_to_cache(cn, mut_cache, mut_hashset_cache);
 }
 
 fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usize) {
     let mut cn = CacheLevel::new();
     find_variables_and_literals(&mut cn, n);
-    if n >= 3 && n < MAX_LENGTH {
-        find_parens_expressions(&mut cn, cache, hashset_cache, n);
-    }
-    if n >= 2 {
-        find_unary_expressions(&mut cn, cache, hashset_cache, n);
-    }
+    find_parens_expressions(&mut cn, cache, hashset_cache, n);
+    find_unary_expressions(&mut cn, cache, hashset_cache, n);
     for k in 1..n - 1 {
         for r in &cache[k] {
             find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
         }
     }
-    add_to_cache(cn, cache, hashset_cache, n);
+    add_to_cache(cn, cache, hashset_cache);
 }
 
 fn main() {

@@ -1,7 +1,6 @@
 use crate::{
     expr::Expr,
     operator::{BinaryOperator, BinaryOperator::*, UnaryOperator, UnaryOperator::*},
-    vec::Vector,
 };
 
 pub type Num = i32;
@@ -27,11 +26,21 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
+pub fn match_one(index: usize, output: Num) -> bool {
+    mapping(output) == GOAL[index]
+}
+
 pub fn match_goal(expr: &Expr) -> bool {
-    expr.output.clone().map(mapping) == Vector::from_slice(GOAL)
+    expr.output
+        .iter()
+        .enumerate()
+        .all(|(i, &o)| match_one(i, o))
 }
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
+
+// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
+pub const MATCH_1BY1: bool = true;
 
 pub const MAX_LENGTH: usize = 14;
 pub const MAX_CACHE_LENGTH: usize = 10;
