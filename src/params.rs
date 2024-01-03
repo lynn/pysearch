@@ -37,15 +37,8 @@ pub const LITERALS: &[Num] = &[
     27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 ];
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
-pub const MAX_LITERAL: Num = 0;
+pub const MAX_LITERAL: Num = 4;
 
-/// To use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8),
-/// change `OP_MOD` to `BinaryOp { apply: apply_trunc_mod, ..OP_MOD }` and
-///        `OP_DIV` to `BinaryOp { apply: apply_trunc_div, ..OP_DIV }`.
-///
-/// To use C-style bit shift (1 >> 32 == 1) rather than Python style (1 >> 32 == 0),
-/// change `OP_BIT_SHL` to `BinaryOp { apply: apply_bit_shl, ..OP_BIT_SHL }` and
-///        `OP_BIT_SHR` to `BinaryOp { apply: apply_bit_shr, ..OP_BIT_SHR }`.
 #[rustfmt::skip]
 pub const BINARY_OPERATORS: &[BinaryOp] = &[
     OP_OR,
@@ -63,12 +56,16 @@ pub const BINARY_OPERATORS: &[BinaryOp] = &[
     OP_BIT_AND,
     OP_BIT_SHL,
     OP_BIT_SHR,
+    // OP_BIT_SHL_WRAP,
+    // OP_BIT_SHR_WRAP,
     OP_ADD,
     OP_SUB,
     OP_MUL,
-    OP_MOD,
-    OP_DIV,
-    // OP_GCD,
+    OP_MOD_FLOOR,
+    OP_DIV_FLOOR,
+    // OP_MOD_TRUNC,
+    // OP_DIV_TRUNC,
+    OP_GCD,
     OP_EXP,
 ];
 

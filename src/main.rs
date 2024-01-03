@@ -126,7 +126,7 @@ fn find_binary_operators(
         if let Some(&op) = BINARY_OPERATORS.get(idx) {
             if op.name.len() == op_len && op.can_apply(el, er) {
                 if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-                    let op_idx: OpIndex = (idx + UNARY_OPERATORS.len()) as OpIndex;
+                    let op_idx: OpIndex = OpIndex::new(idx + UNARY_OPERATORS.len());
                     save(
                         cn,
                         Expr::bin(el.into(), er.into(), op_idx, mask, output),
@@ -186,9 +186,10 @@ fn find_unary_operators(
     if !can_use_required_vars(er.var_mask, n) {
         return;
     }
-    seq!(op_idx in 0..10 {
-        if let Some(&op) = UNARY_OPERATORS.get(op_idx) {
+    seq!(idx in 0..10 {
+        if let Some(&op) = UNARY_OPERATORS.get(idx) {
             if op.can_apply(er) {
+                let op_idx: OpIndex = OpIndex::new(idx);
                 save(
                     cn,
                     Expr::unary(er, op_idx, op.vec_apply(er.output.clone())),

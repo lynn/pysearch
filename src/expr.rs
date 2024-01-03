@@ -22,7 +22,7 @@ unsafe impl Sync for Expr {}
 
 impl Expr {
     pub fn prec(&self) -> u8 {
-        op_prec(self.op_idx)
+        self.op_idx.prec()
     }
 
     pub fn variable(index: usize, output: Vector) -> Self {
@@ -91,7 +91,7 @@ impl Display for Expr {
         if let Some(left) = self.left {
             Self::fmt(unsafe { left.as_ref() }, f)?;
         }
-        write!(f, "{}", op_name(self.op_idx))?;
+        Display::fmt(&self.op_idx, f)?;
         if let Some(right) = self.right {
             Self::fmt(unsafe { right.as_ref() }, f)?;
             if self.op_idx == OP_INDEX_PARENS {

@@ -1,16 +1,40 @@
+use std::fmt::Display;
+
 use crate::{
     expr::{ok_after_keyword, ok_before_keyword, Expr},
     params::{Num, BINARY_OPERATORS, UNARY_OPERATORS},
     vec::Vector,
 };
 
-pub type OpIndex = u8;
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+pub struct OpIndex(u8);
 
-pub const fn op_prec(op_idx: OpIndex) -> u8 {
-    OP_PREC_TABLE[op_idx as usize]
+impl OpIndex {
+    #[inline(always)]
+    pub const fn new(idx: usize) -> Self {
+        Self(idx as u8)
+    }
+
+    #[inline(always)]
+    pub const fn as_index(&self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline(always)]
+    pub const fn prec(&self) -> u8 {
+        OP_PREC_TABLE[self.as_index()]
+    }
+
+    #[inline(always)]
+    pub const fn name(&self) -> &'static str {
+        OP_NAME_TABLE[self.as_index()]
+    }
 }
-pub const fn op_name(op_idx: OpIndex) -> &'static str {
-    OP_NAME_TABLE[op_idx as usize]
+
+impl Display for OpIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -27,7 +51,8 @@ pub struct BinaryOp {
     pub prec: u8,
     pub apply: fn(Num, Num) -> Option<Num>,
     pub can_apply: fn(&Expr, &Expr) -> bool,
-    pub flags: u8,
+    pub commutative: bool,
+    pub right_assoc: bool,
 }
 
 impl UnaryOp {
@@ -43,15 +68,12 @@ impl UnaryOp {
 }
 
 impl BinaryOp {
-    pub const COMMUTATIVE: u8 = 0x01;
-    pub const RIGHT_ASSOC: u8 = 0x02;
-
     #[inline(always)]
-    pub fn vec_apply(&self, mut left: Vector, right: &Vector) -> Option<Vector> {
-        for (x, y) in left.iter_mut().zip(right.iter()) {
+    pub fn vec_apply(&self, mut vl: Vector, vr: &Vector) -> Option<Vector> {
+        for (x, y) in vl.iter_mut().zip(vr.iter()) {
             *x = (self.apply)(*x, *y)?;
         }
-        Some(left)
+        Some(vl)
     }
 
     #[inline(always)]
@@ -60,8 +82,8 @@ impl BinaryOp {
             return false;
         }
         let prec = self.prec;
-        if self.flags & BinaryOp::COMMUTATIVE != 0 {
-            if self.flags & BinaryOp::RIGHT_ASSOC != 0 {
+        if self.commutative {
+            if self.right_assoc {
                 el.prec() > prec
                     && (er.prec() > prec && el as *const Expr <= er as *const Expr
                         || er.prec() == prec)
@@ -71,7 +93,7 @@ impl BinaryOp {
                         || el.prec() == prec)
             }
         } else {
-            if self.flags & BinaryOp::RIGHT_ASSOC != 0 {
+            if self.right_assoc {
                 el.prec() > prec && er.prec() >= prec
             } else {
                 el.prec() >= prec && er.prec() > prec
@@ -111,24 +133,24 @@ pub fn apply_bit_and(l: Num, r: Num) -> Option<Num> {
     Some(l & r)
 }
 pub fn apply_bit_shl(l: Num, r: Num) -> Option<Num> {
-    Some(l << r)
-}
-pub fn apply_python_bit_shl(l: Num, r: Num) -> Option<Num> {
     if r >= 0 && r < Num::BITS as Num {
         Some(l << r)
     } else {
         None
     }
 }
-pub fn apply_bit_shr(l: Num, r: Num) -> Option<Num> {
-    Some(l >> r)
+pub fn apply_bit_shl_wrap(l: Num, r: Num) -> Option<Num> {
+    Some(l << r)
 }
-pub fn apply_python_bit_shr(l: Num, r: Num) -> Option<Num> {
+pub fn apply_bit_shr(l: Num, r: Num) -> Option<Num> {
     if r >= 0 {
         Some(l >> r.min(Num::BITS as Num - 1))
     } else {
         None
     }
+}
+pub fn apply_bit_shr_wrap(l: Num, r: Num) -> Option<Num> {
+    Some(l >> r)
 }
 pub fn apply_add(l: Num, r: Num) -> Option<Num> {
     Some(l + r)
@@ -139,24 +161,24 @@ pub fn apply_sub(l: Num, r: Num) -> Option<Num> {
 pub fn apply_mul(l: Num, r: Num) -> Option<Num> {
     Some(l * r)
 }
-pub fn apply_floor_mod(l: Num, r: Num) -> Option<Num> {
+pub fn apply_mod_floor(l: Num, r: Num) -> Option<Num> {
     if r == 0 || (Num::MIN < 0 && l == Num::MIN && r == !0) {
         None
     } else {
         Some(num_integer::mod_floor(l, r))
     }
 }
-pub fn apply_trunc_mod(l: Num, r: Num) -> Option<Num> {
+pub fn apply_mod_trunc(l: Num, r: Num) -> Option<Num> {
     l.checked_rem(r)
 }
-pub fn apply_floor_div(l: Num, r: Num) -> Option<Num> {
+pub fn apply_div_floor(l: Num, r: Num) -> Option<Num> {
     if r == 0 || (Num::MIN < 0 && l == Num::MIN && r == !0) {
         None
     } else {
         Some(num_integer::div_floor(l, r))
     }
 }
-pub fn apply_trunc_div(l: Num, r: Num) -> Option<Num> {
+pub fn apply_div_trunc(l: Num, r: Num) -> Option<Num> {
     l.checked_div(r)
 }
 pub fn apply_gcd(l: Num, r: Num) -> Option<Num> {
@@ -202,154 +224,208 @@ pub const OP_OR: BinaryOp = BinaryOp {
     prec: 3,
     apply: apply_or,
     can_apply: can_apply_or,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_SPACE_OR: BinaryOp = BinaryOp {
     name: " or",
     prec: 3,
     apply: apply_or,
     can_apply: can_apply_space_or,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_OR_SPACE: BinaryOp = BinaryOp {
     name: "or ",
     prec: 3,
     apply: apply_or,
     can_apply: can_apply_or_space,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_SPACE_OR_SPACE: BinaryOp = BinaryOp {
     name: " or ",
     prec: 3,
     apply: apply_or,
     can_apply: can_apply_space_or_space,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_LT: BinaryOp = BinaryOp {
     name: "<",
     prec: 5,
     apply: apply_lt,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_LE: BinaryOp = BinaryOp {
     name: "<=",
     prec: 5,
     apply: apply_le,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_GT: BinaryOp = BinaryOp {
     name: ">",
     prec: 5,
     apply: apply_gt,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_GE: BinaryOp = BinaryOp {
     name: ">=",
     prec: 5,
     apply: apply_ge,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_EQ: BinaryOp = BinaryOp {
     name: "==",
     prec: 5,
     apply: apply_eq,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_NE: BinaryOp = BinaryOp {
     name: "!=",
     prec: 5,
     apply: apply_ne,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_BIT_OR: BinaryOp = BinaryOp {
     name: "|",
     prec: 6,
     apply: apply_bit_or,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
 pub const OP_BIT_XOR: BinaryOp = BinaryOp {
     name: "^",
     prec: 7,
     apply: apply_bit_xor,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
 pub const OP_BIT_AND: BinaryOp = BinaryOp {
     name: "&",
     prec: 8,
     apply: apply_bit_and,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
 pub const OP_BIT_SHL: BinaryOp = BinaryOp {
     name: "<<",
     prec: 9,
-    apply: apply_python_bit_shl,
+    apply: apply_bit_shl,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
+};
+pub const OP_BIT_SHL_WRAP: BinaryOp = BinaryOp {
+    name: "<<",
+    prec: 9,
+    apply: apply_bit_shl_wrap,
+    can_apply: can_apply_binary_always,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_BIT_SHR: BinaryOp = BinaryOp {
     name: ">>",
     prec: 9,
-    apply: apply_python_bit_shr,
+    apply: apply_bit_shr,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
+};
+pub const OP_BIT_SHR_WRAP: BinaryOp = BinaryOp {
+    name: ">>",
+    prec: 9,
+    apply: apply_bit_shr_wrap,
+    can_apply: can_apply_binary_always,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_ADD: BinaryOp = BinaryOp {
     name: "+",
     prec: 10,
     apply: apply_add,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
 pub const OP_SUB: BinaryOp = BinaryOp {
     name: "-",
     prec: 10,
     apply: apply_sub,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_MUL: BinaryOp = BinaryOp {
     name: "*",
     prec: 11,
     apply: apply_mul,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
-pub const OP_MOD: BinaryOp = BinaryOp {
+pub const OP_MOD_FLOOR: BinaryOp = BinaryOp {
     name: "%",
     prec: 11,
-    apply: apply_floor_mod,
+    apply: apply_mod_floor,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
 };
-pub const OP_DIV: BinaryOp = BinaryOp {
+pub const OP_MOD_TRUNC: BinaryOp = BinaryOp {
+    name: "%",
+    prec: 11,
+    apply: apply_mod_trunc,
+    can_apply: can_apply_binary_always,
+    commutative: false,
+    right_assoc: false,
+};
+pub const OP_DIV_FLOOR: BinaryOp = BinaryOp {
     name: "//",
     prec: 11,
-    apply: apply_floor_div,
+    apply: apply_div_floor,
     can_apply: can_apply_binary_always,
-    flags: 0,
+    commutative: false,
+    right_assoc: false,
+};
+pub const OP_DIV_TRUNC: BinaryOp = BinaryOp {
+    name: "/",
+    prec: 11,
+    apply: apply_div_trunc,
+    can_apply: can_apply_binary_always,
+    commutative: false,
+    right_assoc: false,
 };
 pub const OP_GCD: BinaryOp = BinaryOp {
     name: "V",
-    prec: 13,
+    prec: 11,
     apply: apply_gcd,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::COMMUTATIVE,
+    commutative: true,
+    right_assoc: false,
 };
 pub const OP_EXP: BinaryOp = BinaryOp {
     name: "**",
     prec: 13,
     apply: apply_exp,
     can_apply: can_apply_binary_always,
-    flags: BinaryOp::RIGHT_ASSOC,
+    commutative: false,
+    right_assoc: true,
 };
 pub const OP_BIT_NEG: UnaryOp = UnaryOp {
     name: "~",
@@ -366,9 +442,9 @@ pub const OP_NEG: UnaryOp = UnaryOp {
 
 // All operators: [..Unary, ..Binary, Parens, Literal, Variable]
 pub const NUM_OPERATORS: usize = UNARY_OPERATORS.len() + BINARY_OPERATORS.len() + 3;
-pub const OP_INDEX_PARENS: OpIndex = (NUM_OPERATORS - 3) as OpIndex;
-pub const OP_INDEX_LITERAL: OpIndex = (NUM_OPERATORS - 2) as OpIndex;
-pub const OP_INDEX_VARIABLE: OpIndex = (NUM_OPERATORS - 1) as OpIndex;
+pub const OP_INDEX_PARENS: OpIndex = OpIndex::new(NUM_OPERATORS - 3);
+pub const OP_INDEX_LITERAL: OpIndex = OpIndex::new(NUM_OPERATORS - 2);
+pub const OP_INDEX_VARIABLE: OpIndex = OpIndex::new(NUM_OPERATORS - 1);
 
 const fn gen_op_name_table() -> [&'static str; NUM_OPERATORS] {
     let mut table = [""; NUM_OPERATORS];
@@ -382,7 +458,7 @@ const fn gen_op_name_table() -> [&'static str; NUM_OPERATORS] {
         table[idx + UNARY_OPERATORS.len()] = BINARY_OPERATORS[idx].name;
         idx += 1;
     }
-    table[OP_INDEX_PARENS as usize] = "(";
+    table[OP_INDEX_PARENS.as_index()] = "(";
     table
 }
 
@@ -398,9 +474,9 @@ const fn gen_op_prec_table() -> [u8; NUM_OPERATORS] {
         table[idx + UNARY_OPERATORS.len()] = BINARY_OPERATORS[idx].prec;
         idx += 1;
     }
-    table[OP_INDEX_PARENS as usize] = 14;
-    table[OP_INDEX_LITERAL as usize] = 15;
-    table[OP_INDEX_VARIABLE as usize] = 15;
+    table[OP_INDEX_PARENS.as_index()] = 14;
+    table[OP_INDEX_LITERAL.as_index()] = 15;
+    table[OP_INDEX_VARIABLE.as_index()] = 15;
     table
 }
 
