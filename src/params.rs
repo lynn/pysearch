@@ -1,4 +1,4 @@
-use crate::{expr::Expr, operator::*, vec::Vector};
+use crate::{expr::Expr, operator::*};
 
 pub type Num = i32;
 
@@ -23,8 +23,15 @@ pub fn mapping(n: Num) -> Num {
     n
 }
 
+pub fn match_one(index: usize, output: Num) -> bool {
+    mapping(output) == GOAL[index]
+}
+
 pub fn match_goal(expr: &Expr) -> bool {
-    expr.output.clone().map(mapping) == Vector::from_slice(GOAL)
+    expr.output
+        .iter()
+        .enumerate()
+        .all(|(i, &o)| match_one(i, o))
 }
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
@@ -74,6 +81,9 @@ pub const UNARY_OPERATORS: &[UnaryOp] = &[
     OP_BIT_NEG,
     OP_NEG,
 ];
+
+/// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
+pub const MATCH_1BY1: bool = true;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;

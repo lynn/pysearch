@@ -6,7 +6,7 @@ use crate::{
     vec::Vector,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OpIndex(u8);
 
 impl OpIndex {
@@ -55,7 +55,11 @@ pub struct BinaryOp {
     pub right_assoc: bool,
 }
 
+pub const MAX_OP_PREC: u8 = 255;
+
 impl UnaryOp {
+    pub const PREC: u8 = 12;
+
     #[inline(always)]
     pub fn vec_apply(&self, v: Vector) -> Vector {
         v.map(self.apply)
@@ -463,7 +467,7 @@ const fn gen_op_name_table() -> [&'static str; NUM_OPERATORS] {
 }
 
 const fn gen_op_prec_table() -> [u8; NUM_OPERATORS] {
-    let mut table = [0; NUM_OPERATORS];
+    let mut table = [MAX_OP_PREC; NUM_OPERATORS];
     let mut idx: usize = 0;
     while idx < UNARY_OPERATORS.len() {
         table[idx] = UNARY_OPERATORS[idx].prec;
@@ -474,9 +478,6 @@ const fn gen_op_prec_table() -> [u8; NUM_OPERATORS] {
         table[idx + UNARY_OPERATORS.len()] = BINARY_OPERATORS[idx].prec;
         idx += 1;
     }
-    table[OP_INDEX_PARENS.as_index()] = 14;
-    table[OP_INDEX_LITERAL.as_index()] = 15;
-    table[OP_INDEX_VARIABLE.as_index()] = 15;
     table
 }
 
