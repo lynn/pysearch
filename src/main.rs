@@ -84,7 +84,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
-        if !is_leaf_expr(OP_INDEX_PARENS, n + 2) && expr.prec() < MAX_OP_PREC {
+        if !is_leaf_expr(OP_INDEX_PARENS, n + 2) && expr.op_idx < OP_INDEX_PARENS {
             save(
                 level,
                 Expr::parens((&expr).into()),
@@ -120,8 +120,7 @@ fn find_binary_operators(
         return;
     }
     seq!(idx in 0..100 {
-        if let Some(&op) = BINARY_OPERATORS.get(idx) {
-            let op_idx: OpIndex = OpIndex::new(idx + UNARY_OPERATORS.len());
+        if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
             if op.name.len() == op_len && op.can_apply(el, er) {
                 if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     if el
@@ -136,16 +135,14 @@ fn find_binary_operators(
                     {
                         println!("{}{}{}", el, op_idx, er);
                     }
-                } else {
-                    if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-                        save(
-                            cn,
-                            Expr::bin(el.into(), er.into(), op_idx, mask, output),
-                            n,
-                            cache,
-                            hashset_cache,
-                        );
-                    }
+                } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    save(
+                        cn,
+                        Expr::bin(el.into(), er.into(), op_idx, mask, output),
+                        n,
+                        cache,
+                        hashset_cache,
+                    );
                 }
             }
         }
@@ -199,8 +196,7 @@ fn find_unary_operators(
         return;
     }
     seq!(idx in 0..10 {
-        if let Some(&op) = UNARY_OPERATORS.get(idx) {
-            let op_idx: OpIndex = OpIndex::new(idx);
+        if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
             if op.can_apply(er) {
                 if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     if er
@@ -252,7 +248,7 @@ fn find_parens_expressions(
         if !can_use_required_vars(er.var_mask, n) {
             continue;
         }
-        if er.prec() < MAX_OP_PREC {
+        if er.op_idx < OP_INDEX_PARENS {
             save(cn, Expr::parens(er), n, cache, hashset_cache);
         }
     }
