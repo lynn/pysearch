@@ -6,6 +6,8 @@ use crate::{
     vec::Vector,
 };
 
+pub type Prec = u8;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OpIndex(u8);
 
@@ -21,7 +23,7 @@ impl OpIndex {
     }
 
     #[inline(always)]
-    pub const fn prec(&self) -> u8 {
+    pub const fn prec(&self) -> Prec {
         self.0 >> 4
     }
 
@@ -40,7 +42,7 @@ impl Display for OpIndex {
 #[derive(Clone, Copy)]
 pub struct UnaryOp {
     pub name: &'static str,
-    pub prec: u8,
+    pub prec: Prec,
     pub apply: fn(Num) -> Num,
     pub can_apply: fn(&Expr) -> bool,
 }
@@ -48,7 +50,7 @@ pub struct UnaryOp {
 #[derive(Clone, Copy)]
 pub struct BinaryOp {
     pub name: &'static str,
-    pub prec: u8,
+    pub prec: Prec,
     pub apply: fn(Num, Num) -> Option<Num>,
     pub can_apply: fn(&Expr, &Expr) -> bool,
     pub commutative: bool,
@@ -56,7 +58,7 @@ pub struct BinaryOp {
 }
 
 impl UnaryOp {
-    pub const PREC: u8 = 12;
+    pub const PREC: Prec = 12;
 
     #[inline(always)]
     pub fn vec_apply(&self, v: Vector) -> Vector {
