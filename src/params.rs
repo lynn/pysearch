@@ -72,7 +72,7 @@ pub const BINARY_OPERATORS: &[BinaryOp] = &[
     OP_DIV_FLOOR,
     // OP_MOD_TRUNC,
     // OP_DIV_TRUNC,
-    OP_GCD,
+    // OP_GCD,
     OP_EXP,
 ];
 

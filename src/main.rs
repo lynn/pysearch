@@ -120,33 +120,29 @@ fn find_binary_operators(
         return;
     }
     seq!(idx in 0..100 {
-        if let Some(&op_idx) = OP_BINARY_INDEX_TABLE.get(idx) {
-            if let Some(op) = BINARY_OPERATORS.get(idx) {
-                if op.name.len() == op_len && op.can_apply(el, er) {
-                    if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
-                        if el
-                            .output
-                            .iter()
-                            .zip(er.output.iter())
-                            .enumerate()
-                            .all(|(i, (&ol, &or))| match (op.apply)(ol, or) {
-                                Some(o) => match_one(i, o),
-                                None => false,
-                            })
-                        {
-                            println!("{}{}{}", el, op_idx, er);
-                        }
-                    } else {
-                        if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-                            save(
-                                cn,
-                                Expr::bin(el.into(), er.into(), op_idx, mask, output),
-                                n,
-                                cache,
-                                hashset_cache,
-                            );
-                        }
+        if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
+            if op.name.len() == op_len && op.can_apply(el, er) {
+                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                    if el
+                        .output
+                        .iter()
+                        .zip(er.output.iter())
+                        .enumerate()
+                        .all(|(i, (&ol, &or))| match (op.apply)(ol, or) {
+                            Some(o) => match_one(i, o),
+                            None => false,
+                        })
+                    {
+                        println!("{}{}{}", el, op_idx, er);
                     }
+                } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    save(
+                        cn,
+                        Expr::bin(el.into(), er.into(), op_idx, mask, output),
+                        n,
+                        cache,
+                        hashset_cache,
+                    );
                 }
             }
         }
@@ -200,27 +196,25 @@ fn find_unary_operators(
         return;
     }
     seq!(idx in 0..10 {
-        if let Some(&op_idx) = OP_UNARY_INDEX_TABLE.get(idx) {
-            if let Some(op) = UNARY_OPERATORS.get(idx) {
-                if op.can_apply(er) {
-                    if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
-                        if er
-                            .output
-                            .iter()
-                            .enumerate()
-                            .all(|(i, &or)| match_one(i, (op.apply)(or)))
-                        {
-                            println!("{}{}", op_idx, er);
-                        }
-                    } else {
-                        save(
-                            cn,
-                            Expr::unary(er, op_idx, op.vec_apply(er.output.clone())),
-                            n,
-                            cache,
-                            hashset_cache,
-                        );
+        if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
+            if op.can_apply(er) {
+                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                    if er
+                        .output
+                        .iter()
+                        .enumerate()
+                        .all(|(i, &or)| match_one(i, (op.apply)(or)))
+                    {
+                        println!("{}{}", op_idx, er);
                     }
+                } else {
+                    save(
+                        cn,
+                        Expr::unary(er, op_idx, op.vec_apply(er.output.clone())),
+                        n,
+                        cache,
+                        hashset_cache,
+                    );
                 }
             }
         }
