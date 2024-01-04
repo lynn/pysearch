@@ -11,7 +11,7 @@ pub mod params;
 pub mod vec;
 
 use expr::{Expr, Mask, NonNullExpr};
-use operator::{Operator, UnaryOperator};
+use operator::*;
 use params::*;
 
 use vec::Vector;
@@ -39,10 +39,9 @@ fn can_use_required_vars(mask: u8, length: usize) -> bool {
     !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
 }
 
-fn is_leaf_expr(op: Operator, length: usize) -> bool {
+fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
     length == MAX_LENGTH
-        || length == MAX_LENGTH - 1
-            && (UNARY_OPERATORS.len() == 0 || op.prec() < UnaryOperator::PREC)
+        || length == MAX_LENGTH - 1 && (UNARY_OPERATORS.len() == 0 || op_idx.prec() < UnaryOp::PREC)
 }
 
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
@@ -53,7 +52,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    if !MATCH_1BY1 && is_leaf_expr(expr.op, n) {
+    if !MATCH_1BY1 && is_leaf_expr(expr.op_idx, n) {
         return;
     }
 
@@ -85,7 +84,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
         }
-        if !is_leaf_expr(Operator::Parens, n + 2) && expr.op < Operator::Parens {
+        if !is_leaf_expr(OP_INDEX_PARENS, n + 2) && expr.prec() < MAX_OP_PREC {
             save(
                 level,
                 Expr::parens((&expr).into()),
@@ -120,27 +119,28 @@ fn find_binary_operators(
     if !can_use_required_vars(mask, n) {
         return;
     }
-    seq!(op_idx in 0..100 {
-        if let Some(&op) = BINARY_OPERATORS.get(op_idx) {
-            if op.length() == op_len && op.can_apply(el, er) {
-                if MATCH_1BY1 && is_leaf_expr(op.into(), n) {
+    seq!(idx in 0..100 {
+        if let Some(&op) = BINARY_OPERATORS.get(idx) {
+            let op_idx: OpIndex = OpIndex::new(idx + UNARY_OPERATORS.len());
+            if op.name.len() == op_len && op.can_apply(el, er) {
+                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     if el
                         .output
                         .iter()
                         .zip(er.output.iter())
                         .enumerate()
-                        .all(|(i, (&ol, &or))| match op.apply(ol, or) {
+                        .all(|(i, (&ol, &or))| match (op.apply)(ol, or) {
                             Some(o) => match_one(i, o),
                             None => false,
                         })
                     {
-                        println!("{}{}{}", el, Operator::from(op), er);
+                        println!("{}{}{}", el, op_idx, er);
                     }
                 } else {
                     if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                         save(
                             cn,
-                            Expr::bin(el.into(), er.into(), op.into(), mask, output),
+                            Expr::bin(el.into(), er.into(), op_idx, mask, output),
                             n,
                             cache,
                             hashset_cache,
@@ -198,22 +198,23 @@ fn find_unary_operators(
     if !can_use_required_vars(er.var_mask, n) {
         return;
     }
-    seq!(op_idx in 0..10 {
-        if let Some(&op) = UNARY_OPERATORS.get(op_idx) {
+    seq!(idx in 0..10 {
+        if let Some(&op) = UNARY_OPERATORS.get(idx) {
+            let op_idx: OpIndex = OpIndex::new(idx);
             if op.can_apply(er) {
-                if MATCH_1BY1 && is_leaf_expr(op.into(), n) {
+                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     if er
                         .output
                         .iter()
                         .enumerate()
-                        .all(|(i, &or)| match_one(i, op.apply(or)))
+                        .all(|(i, &or)| match_one(i, (op.apply)(or)))
                     {
-                        println!("{}{}", Operator::from(op), er);
+                        println!("{}{}", op_idx, er);
                     }
                 } else {
                     save(
                         cn,
-                        Expr::unary(er, op.into(), op.vec_apply(er.output.clone())),
+                        Expr::unary(er, op_idx, op.vec_apply(er.output.clone())),
                         n,
                         cache,
                         hashset_cache,
@@ -244,14 +245,14 @@ fn find_parens_expressions(
     hashset_cache: &HashSetCache,
     n: usize,
 ) {
-    if n < 4 || is_leaf_expr(Operator::Parens, n) {
+    if n < 4 || is_leaf_expr(OP_INDEX_PARENS, n) {
         return;
     }
     for er in &cache[n - 2] {
         if !can_use_required_vars(er.var_mask, n) {
             continue;
         }
-        if er.op < Operator::Parens {
+        if er.prec() < MAX_OP_PREC {
             save(cn, Expr::parens(er), n, cache, hashset_cache);
         }
     }

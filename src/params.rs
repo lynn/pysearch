@@ -1,7 +1,4 @@
-use crate::{
-    expr::Expr,
-    operator::{BinaryOperator, BinaryOperator::*, UnaryOperator, UnaryOperator::*},
-};
+use crate::{expr::Expr, operator::*};
 
 pub type Num = i32;
 
@@ -39,9 +36,6 @@ pub fn match_goal(expr: &Expr) -> bool {
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
 
-// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
-pub const MATCH_1BY1: bool = true;
-
 pub const MAX_LENGTH: usize = 14;
 pub const MAX_CACHE_LENGTH: usize = 10;
 pub const MIN_MULTITHREAD_LENGTH: usize = MAX_CACHE_LENGTH + 1;
@@ -50,46 +44,46 @@ pub const LITERALS: &[Num] = &[
     27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 ];
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
-pub const MAX_LITERAL: Num = 0;
+pub const MAX_LITERAL: Num = 4;
 
 #[rustfmt::skip]
-pub const BINARY_OPERATORS: &[BinaryOperator] = &[
-    Or,
-    SpaceOr,
-    OrSpace,
-    // SpaceOrSpace,
-    Lt,
-    Le,
-    // Gt,
-    // Ge,
-    // Eq,
-    // Ne,
-    BitOr,
-    BitXor,
-    BitAnd,
-    BitShl,
-    BitShr,
-    Add,
-    Sub,
-    Mul,
-    Mod,
-    // Div1,
-    Div2,
-    // Gcd,
-    Exp,
+pub const BINARY_OPERATORS: &[BinaryOp] = &[
+    OP_OR,
+    OP_SPACE_OR,
+    OP_OR_SPACE,
+    // OP_SPACE_OR_SPACE,
+    OP_LT,
+    OP_LE,
+    // OP_GT,
+    // OP_GE,
+    // OP_EQ,
+    // OP_NE,
+    OP_BIT_OR,
+    OP_BIT_XOR,
+    OP_BIT_AND,
+    OP_BIT_SHL,
+    OP_BIT_SHR,
+    // OP_BIT_SHL_WRAP,
+    // OP_BIT_SHR_WRAP,
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_MOD_FLOOR,
+    OP_DIV_FLOOR,
+    // OP_MOD_TRUNC,
+    // OP_DIV_TRUNC,
+    OP_GCD,
+    OP_EXP,
 ];
 
 #[rustfmt::skip]
-pub const UNARY_OPERATORS: &[UnaryOperator] = &[
-    BitNeg,
-    Neg
+pub const UNARY_OPERATORS: &[UnaryOp] = &[
+    OP_BIT_NEG,
+    OP_NEG,
 ];
 
-/// Use C-style modulo and division (-2 % 10 == -2) rather than Python style (-2 % 10 == 8).
-pub const C_STYLE_MOD: bool = false;
-
-/// Use C-style bit shift (1 >> 32 == 1) rather than Python style (1 >> 32 == 0).
-pub const C_STYLE_BIT_SHIFT: bool = false;
+/// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
+pub const MATCH_1BY1: bool = true;
 
 /// Search expressions that use the same variable twice (like `x*x`).
 pub const REUSE_VARS: bool = true;
