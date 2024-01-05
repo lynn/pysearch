@@ -157,7 +157,7 @@ fn find_binary_expressions_left(
     k: usize,
     er: &Expr,
 ) {
-    seq!(op_len in 1..=3 {
+    seq!(op_len in 1..=5 {
         if n <= k + op_len {
             return;
         };
@@ -175,7 +175,7 @@ fn find_binary_expressions_right(
     k: usize,
     el: &Expr,
 ) {
-    seq!(op_len in 1..=3 {
+    seq!(op_len in 1..=5 {
         if n <= k + op_len {
             return;
         };

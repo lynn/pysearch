@@ -118,6 +118,15 @@ impl BinaryOp {
 pub fn apply_or(l: Num, r: Num) -> Option<Num> {
     Some(if l != 0 { l } else { r })
 }
+pub fn apply_or_logical(l: Num, r: Num) -> Option<Num> {
+    Some((l != 0 || r != 0) as Num)
+}
+pub fn apply_and(l: Num, r: Num) -> Option<Num> {
+    Some(if l != 0 { r } else { l })
+}
+pub fn apply_and_logical(l: Num, r: Num) -> Option<Num> {
+    Some((l != 0 && r != 0) as Num)
+}
 pub fn apply_lt(l: Num, r: Num) -> Option<Num> {
     Some((l < r) as Num)
 }
@@ -206,6 +215,9 @@ pub fn apply_bit_neg(x: Num) -> Num {
 pub fn apply_neg(x: Num) -> Num {
     0 - x
 }
+pub fn apply_not(x: Num) -> Num {
+    (x == 0) as Num
+}
 
 #[inline(always)]
 pub fn can_apply_unary_always(_: &Expr) -> bool {
@@ -216,19 +228,19 @@ pub fn can_apply_binary_always(_: &Expr, _: &Expr) -> bool {
     true
 }
 #[inline(always)]
-pub fn can_apply_or(el: &Expr, er: &Expr) -> bool {
+pub fn can_apply_keyword(el: &Expr, er: &Expr) -> bool {
     ok_before_keyword(el) && ok_after_keyword(er)
 }
 #[inline(always)]
-pub fn can_apply_space_or(el: &Expr, er: &Expr) -> bool {
+pub fn can_apply_space_keyword(el: &Expr, er: &Expr) -> bool {
     !ok_before_keyword(el) && ok_after_keyword(er)
 }
 #[inline(always)]
-pub fn can_apply_or_space(el: &Expr, er: &Expr) -> bool {
+pub fn can_apply_keyword_space(el: &Expr, er: &Expr) -> bool {
     ok_before_keyword(el) && !ok_after_keyword(er)
 }
 #[inline(always)]
-pub fn can_apply_space_or_space(el: &Expr, er: &Expr) -> bool {
+pub fn can_apply_space_keyword_space(el: &Expr, er: &Expr) -> bool {
     !ok_before_keyword(el) && !ok_after_keyword(er)
 }
 
@@ -236,28 +248,67 @@ pub const OP_OR: BinaryOp = BinaryOp {
     name: "or",
     prec: 3,
     apply: apply_or,
-    can_apply: can_apply_or,
+    can_apply: can_apply_keyword,
     ..BinaryOp::EMPTY
 };
 pub const OP_SPACE_OR: BinaryOp = BinaryOp {
     name: " or",
-    prec: 3,
-    apply: apply_or,
-    can_apply: can_apply_space_or,
-    ..BinaryOp::EMPTY
+    can_apply: can_apply_space_keyword,
+    ..OP_OR
 };
 pub const OP_OR_SPACE: BinaryOp = BinaryOp {
     name: "or ",
-    prec: 3,
-    apply: apply_or,
-    can_apply: can_apply_or_space,
-    ..BinaryOp::EMPTY
+    can_apply: can_apply_keyword_space,
+    ..OP_OR
 };
 pub const OP_SPACE_OR_SPACE: BinaryOp = BinaryOp {
     name: " or ",
+    can_apply: can_apply_space_keyword_space,
+    ..OP_OR
+};
+pub const OP_OR_SYMBOL: BinaryOp = BinaryOp {
+    name: "||",
+    can_apply: can_apply_binary_always,
+    ..OP_OR
+};
+pub const OP_OR_LOGICAL: BinaryOp = BinaryOp {
+    name: "||",
     prec: 3,
-    apply: apply_or,
-    can_apply: can_apply_space_or_space,
+    apply: apply_or_logical,
+    commutative: true,
+    ..BinaryOp::EMPTY
+};
+pub const OP_AND: BinaryOp = BinaryOp {
+    name: "and",
+    prec: 4,
+    apply: apply_and,
+    ..BinaryOp::EMPTY
+};
+pub const OP_SPACE_AND: BinaryOp = BinaryOp {
+    name: " and",
+    can_apply: can_apply_space_keyword,
+    ..OP_AND
+};
+pub const OP_AND_SPACE: BinaryOp = BinaryOp {
+    name: "and ",
+    can_apply: can_apply_keyword_space,
+    ..OP_AND
+};
+pub const OP_SPACE_AND_SPACE: BinaryOp = BinaryOp {
+    name: " and ",
+    can_apply: can_apply_space_keyword_space,
+    ..OP_AND
+};
+pub const OP_AND_SYMBOL: BinaryOp = BinaryOp {
+    name: "&&",
+    can_apply: can_apply_binary_always,
+    ..OP_AND
+};
+pub const OP_AND_LOGICAL: BinaryOp = BinaryOp {
+    name: "&&",
+    prec: 4,
+    apply: apply_and_logical,
+    commutative: true,
     ..BinaryOp::EMPTY
 };
 pub const OP_LT: BinaryOp = BinaryOp {
@@ -323,14 +374,11 @@ pub const OP_BIT_SHL: BinaryOp = BinaryOp {
     name: "<<",
     prec: 9,
     apply: apply_bit_shl,
-    commutative: false,
     ..BinaryOp::EMPTY
 };
 pub const OP_BIT_SHL_WRAP: BinaryOp = BinaryOp {
-    name: "<<",
-    prec: 9,
     apply: apply_bit_shl_wrap,
-    ..BinaryOp::EMPTY
+    ..OP_BIT_SHL
 };
 pub const OP_BIT_SHR: BinaryOp = BinaryOp {
     name: ">>",
@@ -339,10 +387,8 @@ pub const OP_BIT_SHR: BinaryOp = BinaryOp {
     ..BinaryOp::EMPTY
 };
 pub const OP_BIT_SHR_WRAP: BinaryOp = BinaryOp {
-    name: ">>",
-    prec: 9,
     apply: apply_bit_shr_wrap,
-    ..BinaryOp::EMPTY
+    ..OP_BIT_SHR
 };
 pub const OP_ADD: BinaryOp = BinaryOp {
     name: "+",
@@ -412,6 +458,12 @@ pub const OP_NEG: UnaryOp = UnaryOp {
     name: "-",
     prec: 12,
     apply: apply_neg,
+    can_apply: can_apply_unary_always,
+};
+pub const OP_NOT: UnaryOp = UnaryOp {
+    name: "!",
+    prec: 12,
+    apply: apply_not,
     can_apply: can_apply_unary_always,
 };
 
