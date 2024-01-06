@@ -52,6 +52,14 @@ pub const BINARY_OPERATORS: &[BinaryOp] = &[
     OP_SPACE_OR,
     OP_OR_SPACE,
     // OP_SPACE_OR_SPACE,
+    // OP_OR_SYMBOL,
+    // OP_OR_LOGICAL,
+    // OP_AND,
+    // OP_SPACE_AND,
+    // OP_AND_SPACE,
+    // OP_SPACE_AND_SPACE,
+    // OP_AND_SYMBOL,
+    // OP_AND_LOGICAL,
     OP_LT,
     OP_LE,
     // OP_GT,
@@ -80,6 +88,7 @@ pub const BINARY_OPERATORS: &[BinaryOp] = &[
 pub const UNARY_OPERATORS: &[UnaryOp] = &[
     OP_BIT_NEG,
     OP_NEG,
+    // OP_NOT,
 ];
 
 /// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
