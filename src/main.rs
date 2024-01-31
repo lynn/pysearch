@@ -47,7 +47,7 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
 
-    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && match_goal(&expr) {
+    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && Matcher::new().match_all(&expr) {
         println!("{expr}");
         return;
     }
@@ -123,13 +123,14 @@ fn find_binary_operators(
         if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
             if op.name.len() == op_len && op.can_apply(el, er) {
                 if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                    let mut matcher = Matcher::new();
                     if el
                         .output
                         .iter()
                         .zip(er.output.iter())
                         .enumerate()
                         .all(|(i, (&ol, &or))| match (op.apply)(ol, or) {
-                            Some(o) => match_one(i, o),
+                            Some(o) => matcher.match_one(i, o),
                             None => false,
                         })
                     {
@@ -199,11 +200,12 @@ fn find_unary_operators(
         if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
             if op.can_apply(er) {
                 if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                    let mut matcher = Matcher::new();
                     if er
                         .output
                         .iter()
                         .enumerate()
-                        .all(|(i, &or)| match_one(i, (op.apply)(or)))
+                        .all(|(i, &or)| matcher.match_one(i, (op.apply)(or)))
                     {
                         println!("{}{}", op_idx, er);
                     }

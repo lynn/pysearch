@@ -12,26 +12,23 @@ pub const INPUTS: &[Input] = &[Input {
     vec: &['E' as i32, 'W' as i32, 'N' as i32, 'S' as i32],
 }];
 
-/// This function gets applied to the output when comparing to GOAL.
-///
-/// If you only care about e.g. truthiness, change this to
-///
-///     (n != 0) as Num
-///
-/// and use only 0/1 in the GOAL.
-pub fn mapping(n: Num) -> Num {
-    n
-}
+pub struct Matcher {}
 
-pub fn match_one(index: usize, output: Num) -> bool {
-    mapping(output) == GOAL[index]
-}
+impl Matcher {
+    pub fn new() -> Matcher {
+        Matcher {}
+    }
 
-pub fn match_goal(expr: &Expr) -> bool {
-    expr.output
-        .iter()
-        .enumerate()
-        .all(|(i, &o)| match_one(i, o))
+    pub fn match_one(&mut self, index: usize, output: Num) -> bool {
+        output == GOAL[index]
+    }
+
+    pub fn match_all(&mut self, expr: &Expr) -> bool {
+        expr.output
+            .iter()
+            .enumerate()
+            .all(|(i, &o)| self.match_one(i, o))
+    }
 }
 
 pub const GOAL: &[Num] = &[1, -1, 0, 0];
