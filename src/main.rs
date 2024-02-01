@@ -133,8 +133,9 @@ fn find_binary_operators(
                             Some(o) => matcher.match_one(i, o),
                             None => false,
                         })
+                        && matcher.match_final(Some(el), er, op_idx)
                     {
-                        println!("{}{}{}", el, op_idx, er);
+                        println!("{el}{op_idx}{er}");
                     }
                 } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                     save(
@@ -206,8 +207,9 @@ fn find_unary_operators(
                         .iter()
                         .enumerate()
                         .all(|(i, &or)| matcher.match_one(i, (op.apply)(or)))
+                        && matcher.match_final(None, er, op_idx)
                     {
-                        println!("{}{}", op_idx, er);
+                        println!("{op_idx}{er}");
                     }
                 } else {
                     save(

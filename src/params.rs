@@ -23,11 +23,21 @@ impl Matcher {
         output == GOAL[index]
     }
 
+    // Will be called after match_one returns true for all outputs
+    pub fn match_final(&mut self, _el: Option<&Expr>, _er: &Expr, _op: OpIndex) -> bool {
+        true
+    }
+
     pub fn match_all(&mut self, expr: &Expr) -> bool {
         expr.output
             .iter()
             .enumerate()
             .all(|(i, &o)| self.match_one(i, o))
+            && self.match_final(
+                expr.left.map(|e| unsafe { e.as_ref() }),
+                unsafe { expr.right.unwrap().as_ref() },
+                expr.op_idx,
+            )
     }
 }
 
