@@ -15,8 +15,8 @@ pub const INPUTS: &[Input] = &[Input {
 pub struct Matcher {}
 
 impl Matcher {
-    pub fn new() -> Matcher {
-        Matcher {}
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn match_one(&mut self, index: usize, output: Num) -> bool {
@@ -24,16 +24,17 @@ impl Matcher {
     }
 
     // Will be called after match_one returns true for all outputs
-    pub fn match_final(&mut self, _el: Option<&Expr>, _er: &Expr, _op: OpIndex) -> bool {
+    pub fn match_final(self, _el: Option<&Expr>, _er: &Expr, _op: OpIndex) -> bool {
         true
     }
 
-    pub fn match_all(&mut self, expr: &Expr) -> bool {
+    pub fn match_all(expr: &Expr) -> bool {
+        let mut matcher = Self::new();
         expr.output
             .iter()
             .enumerate()
-            .all(|(i, &o)| self.match_one(i, o))
-            && self.match_final(
+            .all(|(i, &o)| matcher.match_one(i, o))
+            && matcher.match_final(
                 expr.left.map(|e| unsafe { e.as_ref() }),
                 unsafe { expr.right.unwrap().as_ref() },
                 expr.op_idx,

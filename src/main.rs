@@ -47,7 +47,7 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
     const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
 
-    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && Matcher::new().match_all(&expr) {
+    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && Matcher::match_all(&expr) {
         println!("{expr}");
         return;
     }
