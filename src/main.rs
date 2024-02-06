@@ -367,7 +367,7 @@ fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usiz
     add_to_cache(cn, cache, hashset_cache);
 }
 
-fn main() {
+fn validate_input() {
     for i in INPUTS {
         assert_eq!(
             i.vec.len(),
@@ -375,6 +375,20 @@ fn main() {
             "INPUTS and GOAL must have equal length"
         );
     }
+
+    let mut input_set = HashSet::new();
+    for i in 0..INPUTS[0].vec.len() {
+        let mut input = [0; INPUTS.len()];
+        for j in 0..INPUTS.len() {
+            input[j] = INPUTS[j].vec[i];
+        }
+        assert!(input_set.insert(input), "duplicated input {:?}", input);
+    }
+}
+
+fn main() {
+    validate_input();
+
     let mut cache: Cache = vec![CacheLevel::new()];
     let mut hashset_cache: HashSetCache = HashSetCache::new();
     let mut total_count = 0;
