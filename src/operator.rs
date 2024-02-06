@@ -282,6 +282,7 @@ pub const OP_AND: BinaryOp = BinaryOp {
     name: "and",
     prec: 4,
     apply: apply_and,
+    can_apply: can_apply_keyword,
     ..BinaryOp::EMPTY
 };
 pub const OP_SPACE_AND: BinaryOp = BinaryOp {
