@@ -72,7 +72,7 @@ impl Expr {
             left: None,
             right: Some(er.into()),
             op_idx,
-            var_count: er.var_count.clone(),
+            var_count: er.var_count,
             output,
         }
     }
@@ -82,7 +82,7 @@ impl Expr {
             left: None,
             right: Some(er.into()),
             op_idx: OP_INDEX_PARENS,
-            var_count: er.var_count.clone(),
+            var_count: er.var_count,
             output: er.output.clone(),
         }
     }

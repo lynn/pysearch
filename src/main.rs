@@ -127,14 +127,10 @@ fn find_binary_operators(
     if er.is_literal() && el.is_literal() {
         return;
     }
-    let var_count: VarCount = el
-        .var_count
-        .iter()
-        .zip(er.var_count.iter())
-        .map(|(&l, &r)| l + r)
-        .collect::<Vec<u8>>()
-        .try_into()
-        .unwrap();
+    let mut var_count = el.var_count;
+    for (l, &r) in var_count.iter_mut().zip(er.var_count.iter()) {
+        *l += r;
+    }
     if var_count
         .iter()
         .zip(INPUTS.iter())
