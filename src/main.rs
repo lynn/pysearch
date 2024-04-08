@@ -10,7 +10,7 @@ pub mod params;
 #[cfg_attr(not(feature = "simd"), path = "vec.rs")]
 pub mod vec;
 
-use expr::{Expr, Mask, NonNullExpr};
+use expr::{Expr, NonNullExpr, VarCount};
 use operator::*;
 use params::*;
 
@@ -35,8 +35,13 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
-fn can_use_required_vars(mask: u8, length: usize) -> bool {
-    !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
+fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
+    let missing_uses: u8 = var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .map(|(&c, i)| (i.min_uses - std::cmp::min(c, i.min_uses)))
+        .sum();
+    length + missing_uses as usize * 2 <= MAX_LENGTH
 }
 
 fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
@@ -45,9 +50,13 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
 }
 
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
-    const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
+    let uses_required_vars = expr
+        .var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .all(|(&c, i)| c >= i.min_uses);
 
-    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && Matcher::match_all(&expr) {
+    if uses_required_vars && Matcher::match_all(&expr) {
         println!("{expr}");
         return;
     }
@@ -56,7 +65,13 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    if !REUSE_VARS && expr.var_mask == ALL_MASK {
+    let cant_use_more_vars = expr
+        .var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .all(|(&c, i)| c == i.max_uses);
+
+    if cant_use_more_vars {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
             if let Some(old) = mp.insert(expr.output[i], GOAL[i]) {
@@ -112,11 +127,22 @@ fn find_binary_operators(
     if er.is_literal() && el.is_literal() {
         return;
     }
-    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+    let var_count: VarCount = el
+        .var_count
+        .iter()
+        .zip(er.var_count.iter())
+        .map(|(&l, &r)| l + r)
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
+    if var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .any(|(&c, i)| c > i.max_uses)
+    {
         return;
     }
-    let mask = el.var_mask | er.var_mask;
-    if !can_use_required_vars(mask, n) {
+    if !can_use_required_vars(var_count, n) {
         return;
     }
     seq!(idx in 0..100 {
@@ -140,7 +166,7 @@ fn find_binary_operators(
                 } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                     save(
                         cn,
-                        Expr::bin(el.into(), er.into(), op_idx, mask, output),
+                        Expr::bin(el.into(), er.into(), op_idx, var_count, output),
                         n,
                         cache,
                         hashset_cache,
@@ -194,7 +220,7 @@ fn find_unary_operators(
     n: usize,
     er: &Expr,
 ) {
-    if !can_use_required_vars(er.var_mask, n) {
+    if !can_use_required_vars(er.var_count, n) {
         return;
     }
     seq!(idx in 0..10 {
@@ -249,7 +275,7 @@ fn find_parens_expressions(
         return;
     }
     for er in &cache[n - 2] {
-        if !can_use_required_vars(er.var_mask, n) {
+        if !can_use_required_vars(er.var_count, n) {
             continue;
         }
         if er.op_idx < OP_INDEX_PARENS {

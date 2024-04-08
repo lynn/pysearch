@@ -5,11 +5,15 @@ pub type Num = i32;
 pub struct Input {
     pub name: &'static str,
     pub vec: &'static [Num],
+    pub min_uses: u8,
+    pub max_uses: u8,
 }
 
 pub const INPUTS: &[Input] = &[Input {
     name: "n",
     vec: &['E' as i32, 'W' as i32, 'N' as i32, 'S' as i32],
+    min_uses: 1,
+    max_uses: 255,
 }];
 
 pub struct Matcher {}
@@ -101,9 +105,3 @@ pub const UNARY_OPERATORS: &[UnaryOp] = &[
 
 /// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
 pub const MATCH_1BY1: bool = true;
-
-/// Search expressions that use the same variable twice (like `x*x`).
-pub const REUSE_VARS: bool = true;
-
-/// Controls whether all declared variables should be always used.
-pub const USE_ALL_VARS: bool = true;
