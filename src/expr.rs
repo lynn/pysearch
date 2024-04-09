@@ -32,7 +32,7 @@ impl Expr {
             left: None,
             right: None,
             op_idx: OP_INDEX_VARIABLE,
-            var_count: var_count,
+            var_count,
             output,
         }
     }

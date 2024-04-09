@@ -39,7 +39,7 @@ fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
     let missing_uses: u8 = var_count
         .iter()
         .zip(INPUTS.iter())
-        .map(|(&c, i)| (i.min_uses - std::cmp::min(c, i.min_uses)))
+        .map(|(&c, i)| i.min_uses - std::cmp::min(c, i.min_uses))
         .sum();
     length + missing_uses as usize * 2 <= MAX_LENGTH
 }
@@ -47,6 +47,17 @@ fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
 fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
     length == MAX_LENGTH
         || length == MAX_LENGTH - 1 && (UNARY_OPERATORS.len() == 0 || op_idx.prec() < UnaryOp::PREC)
+}
+
+const fn has_unlimited_var() -> bool {
+    let mut i = 0;
+    while i < INPUTS.len() {
+        if INPUTS[i].max_uses == u8::MAX {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
@@ -65,11 +76,12 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    let cant_use_more_vars = expr
-        .var_count
-        .iter()
-        .zip(INPUTS.iter())
-        .all(|(&c, i)| c == i.max_uses);
+    let cant_use_more_vars = !has_unlimited_var()
+        && expr
+            .var_count
+            .iter()
+            .zip(INPUTS.iter())
+            .all(|(&c, i)| c == i.max_uses);
 
     if cant_use_more_vars {
         let mut mp: HashMap<Num, Num> = HashMap::new();
@@ -128,15 +140,15 @@ fn find_binary_operators(
         return;
     }
     let mut var_count = el.var_count;
-    for (l, &r) in var_count.iter_mut().zip(er.var_count.iter()) {
-        *l += r;
-    }
-    if var_count
-        .iter()
+    for ((l, &r), i) in var_count
+        .iter_mut()
+        .zip(er.var_count.iter())
         .zip(INPUTS.iter())
-        .any(|(&c, i)| c > i.max_uses)
     {
-        return;
+        *l += r;
+        if *l > i.max_uses {
+            return;
+        }
     }
     if !can_use_required_vars(var_count, n) {
         return;
@@ -398,7 +410,14 @@ fn validate_input() {
             GOAL.len(),
             "INPUTS and GOAL must have equal length"
         );
+
+        assert_ne!(i.max_uses, 0, "INPUTS maximum uses must be non-zero");
     }
+
+    assert!(
+        INPUTS.iter().map(|i| i.min_uses as usize).sum::<usize>() * 2 <= MAX_LENGTH + 1,
+        "The minimum uses requirement will never be met"
+    );
 
     let mut input_set = HashSet::new();
     for i in 0..INPUTS[0].vec.len() {
