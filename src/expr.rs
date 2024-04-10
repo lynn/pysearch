@@ -7,14 +7,14 @@ use crate::{
     vec::Vector,
 };
 
-pub type Mask = u8;
+pub type VarCount = [u8; INPUTS.len()];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expr {
     pub left: Option<NonNull<Expr>>,
     pub right: Option<NonNull<Expr>>,
     pub op_idx: OpIndex,
-    pub var_mask: Mask,
+    pub var_count: VarCount,
     pub output: Vector,
 }
 unsafe impl Send for Expr {}
@@ -26,11 +26,13 @@ impl Expr {
     }
 
     pub fn variable(index: usize, output: Vector) -> Self {
+        let mut var_count = [0; INPUTS.len()];
+        var_count[index] = 1;
         Self {
             left: None,
             right: None,
             op_idx: OP_INDEX_VARIABLE,
-            var_mask: 1 << index,
+            var_count,
             output,
         }
     }
@@ -40,27 +42,27 @@ impl Expr {
             left: None,
             right: None,
             op_idx: OP_INDEX_LITERAL,
-            var_mask: 0,
+            var_count: [0; INPUTS.len()],
             output: Vector::constant(value),
         }
     }
 
     pub fn is_literal(&self) -> bool {
-        self.var_mask == 0
+        self.var_count.iter().all(|&var_count| var_count == 0)
     }
 
     pub fn bin(
         el: NonNull<Expr>,
         er: NonNull<Expr>,
         op_idx: OpIndex,
-        var_mask: Mask,
+        var_count: VarCount,
         output: Vector,
     ) -> Self {
         Self {
             left: Some(el),
             right: Some(er),
             op_idx,
-            var_mask,
+            var_count,
             output,
         }
     }
@@ -70,7 +72,7 @@ impl Expr {
             left: None,
             right: Some(er.into()),
             op_idx,
-            var_mask: er.var_mask,
+            var_count: er.var_count,
             output,
         }
     }
@@ -80,7 +82,7 @@ impl Expr {
             left: None,
             right: Some(er.into()),
             op_idx: OP_INDEX_PARENS,
-            var_mask: er.var_mask,
+            var_count: er.var_count,
             output: er.output.clone(),
         }
     }
@@ -101,7 +103,7 @@ impl Display for Expr {
             write!(
                 f,
                 "{}",
-                INPUTS[self.var_mask.trailing_zeros() as usize].name
+                INPUTS[self.var_count.iter().position(|&c| c == 1).unwrap()].name
             )?;
         } else {
             write!(f, "{}", self.output[0])?;

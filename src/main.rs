@@ -10,7 +10,7 @@ pub mod params;
 #[cfg_attr(not(feature = "simd"), path = "vec.rs")]
 pub mod vec;
 
-use expr::{Expr, Mask, NonNullExpr};
+use expr::{Expr, NonNullExpr, VarCount};
 use operator::*;
 use params::*;
 
@@ -35,8 +35,13 @@ fn positive_integer_length(mut k: Num) -> usize {
     l
 }
 
-fn can_use_required_vars(mask: u8, length: usize) -> bool {
-    !USE_ALL_VARS || length + (INPUTS.len() - (mask.count_ones() as usize)) * 2 <= MAX_LENGTH
+fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
+    let missing_uses: u8 = var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .map(|(&c, i)| i.min_uses - std::cmp::min(c, i.min_uses))
+        .sum();
+    length + missing_uses as usize * 2 <= MAX_LENGTH
 }
 
 fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
@@ -44,10 +49,25 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
         || length == MAX_LENGTH - 1 && (UNARY_OPERATORS.len() == 0 || op_idx.prec() < UnaryOp::PREC)
 }
 
-fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
-    const ALL_MASK: Mask = (1 << INPUTS.len()) - 1;
+const fn has_unlimited_var() -> bool {
+    let mut i = 0;
+    while i < INPUTS.len() {
+        if INPUTS[i].max_uses == u8::MAX {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
 
-    if (!USE_ALL_VARS || expr.var_mask == ALL_MASK) && Matcher::match_all(&expr) {
+fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
+    let uses_required_vars = expr
+        .var_count
+        .iter()
+        .zip(INPUTS.iter())
+        .all(|(&c, i)| c >= i.min_uses);
+
+    if uses_required_vars && Matcher::match_all(&expr) {
         println!("{expr}");
         return;
     }
@@ -56,7 +76,14 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    if !REUSE_VARS && expr.var_mask == ALL_MASK {
+    let cant_use_more_vars = !has_unlimited_var()
+        && expr
+            .var_count
+            .iter()
+            .zip(INPUTS.iter())
+            .all(|(&c, i)| c == i.max_uses);
+
+    if cant_use_more_vars {
         let mut mp: HashMap<Num, Num> = HashMap::new();
         for i in 0..GOAL.len() {
             if let Some(old) = mp.insert(expr.output[i], GOAL[i]) {
@@ -112,11 +139,18 @@ fn find_binary_operators(
     if er.is_literal() && el.is_literal() {
         return;
     }
-    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
-        return;
+    let mut var_count = el.var_count;
+    for ((l, &r), i) in var_count
+        .iter_mut()
+        .zip(er.var_count.iter())
+        .zip(INPUTS.iter())
+    {
+        *l += r;
+        if *l > i.max_uses {
+            return;
+        }
     }
-    let mask = el.var_mask | er.var_mask;
-    if !can_use_required_vars(mask, n) {
+    if !can_use_required_vars(var_count, n) {
         return;
     }
     seq!(idx in 0..100 {
@@ -140,7 +174,7 @@ fn find_binary_operators(
                 } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                     save(
                         cn,
-                        Expr::bin(el.into(), er.into(), op_idx, mask, output),
+                        Expr::bin(el.into(), er.into(), op_idx, var_count, output),
                         n,
                         cache,
                         hashset_cache,
@@ -194,7 +228,7 @@ fn find_unary_operators(
     n: usize,
     er: &Expr,
 ) {
-    if !can_use_required_vars(er.var_mask, n) {
+    if !can_use_required_vars(er.var_count, n) {
         return;
     }
     seq!(idx in 0..10 {
@@ -249,7 +283,7 @@ fn find_parens_expressions(
         return;
     }
     for er in &cache[n - 2] {
-        if !can_use_required_vars(er.var_mask, n) {
+        if !can_use_required_vars(er.var_count, n) {
             continue;
         }
         if er.op_idx < OP_INDEX_PARENS {
@@ -376,7 +410,14 @@ fn validate_input() {
             GOAL.len(),
             "INPUTS and GOAL must have equal length"
         );
+
+        assert_ne!(i.max_uses, 0, "INPUTS maximum uses must be non-zero");
     }
+
+    assert!(
+        INPUTS.iter().map(|i| i.min_uses as usize).sum::<usize>() * 2 <= MAX_LENGTH + 1,
+        "The minimum uses requirement will never be met"
+    );
 
     let mut input_set = HashSet::new();
     for i in 0..INPUTS[0].vec.len() {
