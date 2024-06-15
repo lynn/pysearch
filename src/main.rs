@@ -105,8 +105,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
 
     if n > MAX_CACHE_LENGTH {
         for dfs_len in n + 2..=MAX_LENGTH {
-            find_binary_expressions_left(level, cache, hashset_cache, dfs_len, n, &expr);
-            find_binary_expressions_right(level, cache, hashset_cache, dfs_len, n, &expr);
+            find_binary_expressions(level, cache, hashset_cache, dfs_len, n, &expr);
         }
         if n + 1 <= MAX_LENGTH {
             find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
@@ -203,20 +202,21 @@ fn find_binary_expressions_left(
     });
 }
 
-fn find_binary_expressions_right(
+fn find_binary_expressions(
     cn: &mut CacheLevel,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
     k: usize,
-    el: &Expr,
+    e1: &Expr,
 ) {
     seq!(op_len in 1..=5 {
         if n <= k + op_len {
             return;
         };
-        for er in &cache[n - k - op_len] {
-            find_binary_operators(cn, cache, hashset_cache, n, el, er, op_len);
+        for e2 in &cache[n - k - op_len] {
+            find_binary_operators(cn, cache, hashset_cache, n, e1, e2, op_len);
+            find_binary_operators(cn, cache, hashset_cache, n, e2, e1, op_len);
         }
     });
 }
