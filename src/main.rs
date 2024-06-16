@@ -41,7 +41,7 @@ fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
         .zip(INPUTS.iter())
         .map(|(&c, i)| i.min_uses - std::cmp::min(c, i.min_uses))
         .sum();
-    length + missing_uses as usize * 2 <= MAX_LENGTH
+    length + missing_uses as usize * (1 + MIN_BINARY_OP_LEN) <= MAX_LENGTH
 }
 
 fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
@@ -104,7 +104,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
     }
 
     if n > MAX_CACHE_LENGTH {
-        for dfs_len in n + 2..=MAX_LENGTH {
+        for dfs_len in n + 1 + MIN_BINARY_OP_LEN..=MAX_LENGTH {
             find_binary_expressions(level, cache, hashset_cache, dfs_len, n, &expr);
         }
         if n + 1 <= MAX_LENGTH {
@@ -192,7 +192,7 @@ fn find_binary_expressions_left(
     k: usize,
     er: &Expr,
 ) {
-    seq!(op_len in 1..=5 {
+    seq!(op_len in 0..=5 {
         if n <= k + op_len {
             return;
         };
@@ -210,7 +210,7 @@ fn find_binary_expressions(
     k: usize,
     e1: &Expr,
 ) {
-    seq!(op_len in 1..=5 {
+    seq!(op_len in 0..=5 {
         if n <= k + op_len {
             return;
         };
@@ -357,7 +357,7 @@ fn find_expressions_multithread(
     let cache = &mut_cache;
     let hashset_cache = &mut_hashset_cache;
 
-    let mut cn = (1..n - 1)
+    let mut cn = (1..n - MIN_BINARY_OP_LEN)
         .into_par_iter()
         .flat_map(|k| {
             cache[k].par_iter().map(move |r| {
@@ -395,7 +395,7 @@ fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usiz
     find_variables_and_literals(&mut cn, n);
     find_parens_expressions(&mut cn, cache, hashset_cache, n);
     find_unary_expressions(&mut cn, cache, hashset_cache, n);
-    for k in 1..n - 1 {
+    for k in 1..n - MIN_BINARY_OP_LEN {
         for r in &cache[k] {
             find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
         }
@@ -415,7 +415,8 @@ fn validate_input() {
     }
 
     assert!(
-        INPUTS.iter().map(|i| i.min_uses as usize).sum::<usize>() * 2 <= MAX_LENGTH + 1,
+        INPUTS.iter().map(|i| i.min_uses as usize).sum::<usize>() * (1 + MIN_BINARY_OP_LEN)
+            <= MAX_LENGTH + 1,
         "The minimum uses requirement will never be met"
     );
 
