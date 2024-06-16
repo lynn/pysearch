@@ -155,6 +155,7 @@ pub fn apply_bit_and(l: Num, r: Num) -> Option<Num> {
     Some(l & r)
 }
 pub fn apply_bit_shl(l: Num, r: Num) -> Option<Num> {
+    #[allow(unused_comparisons)]
     if r >= 0 && r < Num::BITS as Num {
         Some(l << r)
     } else {
@@ -165,6 +166,7 @@ pub fn apply_bit_shl_wrap(l: Num, r: Num) -> Option<Num> {
     Some(l << r)
 }
 pub fn apply_bit_shr(l: Num, r: Num) -> Option<Num> {
+    #[allow(unused_comparisons)]
     if r >= 0 {
         Some(l >> r.min(Num::BITS as Num - 1))
     } else {
@@ -184,6 +186,7 @@ pub fn apply_mul(l: Num, r: Num) -> Option<Num> {
     Some(l * r)
 }
 pub fn apply_mod_floor(l: Num, r: Num) -> Option<Num> {
+    #[allow(unused_comparisons)]
     if r == 0 || (Num::MIN < 0 && l == Num::MIN && r == !0) {
         None
     } else {
@@ -194,6 +197,7 @@ pub fn apply_mod_trunc(l: Num, r: Num) -> Option<Num> {
     l.checked_rem(r)
 }
 pub fn apply_div_floor(l: Num, r: Num) -> Option<Num> {
+    #[allow(unused_comparisons)]
     if r == 0 || (Num::MIN < 0 && l == Num::MIN && r == !0) {
         None
     } else {
