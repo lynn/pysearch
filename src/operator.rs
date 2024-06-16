@@ -507,7 +507,9 @@ const fn gen_index_tables() -> (
     (binary_table, unary_table)
 }
 
-const fn gen_op_name_table() -> [&'static str; 256] {
+pub const OP_BINARY_INDEX_TABLE: [OpIndex; BINARY_OPERATORS.len()] = gen_index_tables().0;
+pub const OP_UNARY_INDEX_TABLE: [OpIndex; UNARY_OPERATORS.len()] = gen_index_tables().1;
+pub const OP_NAME_TABLE: [&'static str; 256] = {
     let mut table = [""; 256];
     let mut i: usize = 0;
     while i < OP_BINARY_INDEX_TABLE.len() {
@@ -521,8 +523,15 @@ const fn gen_op_name_table() -> [&'static str; 256] {
     }
     table[OP_INDEX_PARENS.as_index()] = "(";
     table
-}
-
-pub const OP_BINARY_INDEX_TABLE: [OpIndex; BINARY_OPERATORS.len()] = gen_index_tables().0;
-pub const OP_UNARY_INDEX_TABLE: [OpIndex; UNARY_OPERATORS.len()] = gen_index_tables().1;
-pub const OP_NAME_TABLE: [&'static str; 256] = gen_op_name_table();
+};
+pub const MIN_BINARY_OP_LEN: usize = {
+    let mut min_len = usize::MAX;
+    let mut i = 0;
+    while i < OP_BINARY_INDEX_TABLE.len() {
+        if BINARY_OPERATORS[i].name.len() < min_len {
+            min_len = BINARY_OPERATORS[i].name.len();
+        }
+        i += 1;
+    }
+    min_len
+};
