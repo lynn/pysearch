@@ -357,7 +357,7 @@ fn find_expressions_multithread(
     let cache = &mut_cache;
     let hashset_cache = &mut_hashset_cache;
 
-    let mut cn = (1..n - MIN_BINARY_OP_LEN)
+    let mut cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
         .into_par_iter()
         .flat_map(|k| {
             cache[k].par_iter().map(move |r| {
@@ -395,7 +395,7 @@ fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usiz
     find_variables_and_literals(&mut cn, n);
     find_parens_expressions(&mut cn, cache, hashset_cache, n);
     find_unary_expressions(&mut cn, cache, hashset_cache, n);
-    for k in 1..n - MIN_BINARY_OP_LEN {
+    for k in 1..n.saturating_sub(MIN_BINARY_OP_LEN) {
         for r in &cache[k] {
             find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
         }
