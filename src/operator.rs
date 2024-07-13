@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     expr::{ok_after_keyword, ok_before_keyword, Expr},
-    params::{Num, BINARY_OPERATORS, UNARY_OPERATORS},
+    params::{Num, BINARY_OPERATORS, ERROR_VALUE, UNARY_OPERATORS},
     vec::Vector,
 };
 
@@ -55,14 +55,24 @@ pub struct BinaryOp {
     pub can_apply: fn(&Expr, &Expr) -> bool,
     pub commutative: bool,
     pub right_assoc: bool,
+    pub short_circuit: bool,
 }
 
 impl UnaryOp {
     pub const PREC: Prec = 12;
 
     #[inline(always)]
+    pub fn apply_(&self, x: Num) -> Num {
+        if Some(x) == ERROR_VALUE {
+            x
+        } else {
+            (self.apply)(x)
+        }
+    }
+
+    #[inline(always)]
     pub fn vec_apply(&self, v: Vector) -> Vector {
-        v.map(self.apply)
+        v.map(|x| self.apply_(x))
     }
 
     #[inline(always)]
@@ -79,12 +89,22 @@ impl BinaryOp {
         can_apply: can_apply_binary_always,
         commutative: false,
         right_assoc: false,
+        short_circuit: false,
     };
 
     #[inline(always)]
+    pub fn apply_(&self, l: Num, r: Num) -> Option<Num> {
+        if Some(l) == ERROR_VALUE || !self.short_circuit && Some(r) == ERROR_VALUE {
+            ERROR_VALUE
+        } else {
+            (self.apply)(l, r).or(ERROR_VALUE)
+        }
+    }
+
+    #[inline(always)]
     pub fn vec_apply(&self, mut vl: Vector, vr: &Vector) -> Option<Vector> {
-        for (x, y) in vl.iter_mut().zip(vr.iter()) {
-            *x = (self.apply)(*x, *y)?;
+        for (l, &r) in vl.iter_mut().zip(vr.iter()) {
+            *l = self.apply_(*l, r)?;
         }
         Some(vl)
     }
@@ -119,13 +139,21 @@ pub fn apply_or(l: Num, r: Num) -> Option<Num> {
     Some(if l != 0 { l } else { r })
 }
 pub fn apply_or_logical(l: Num, r: Num) -> Option<Num> {
-    Some((l != 0 || r != 0) as Num)
+    if l == 0 && Some(r) == ERROR_VALUE {
+        ERROR_VALUE
+    } else {
+        Some((l != 0 || r != 0) as Num)
+    }
 }
 pub fn apply_and(l: Num, r: Num) -> Option<Num> {
     Some(if l != 0 { r } else { l })
 }
 pub fn apply_and_logical(l: Num, r: Num) -> Option<Num> {
-    Some((l != 0 && r != 0) as Num)
+    if l != 0 && Some(r) == ERROR_VALUE {
+        ERROR_VALUE
+    } else {
+        Some((l != 0 && r != 0) as Num)
+    }
 }
 pub fn apply_lt(l: Num, r: Num) -> Option<Num> {
     Some((l < r) as Num)
@@ -253,6 +281,7 @@ pub const OP_OR: BinaryOp = BinaryOp {
     prec: 3,
     apply: apply_or,
     can_apply: can_apply_keyword,
+    short_circuit: true,
     ..BinaryOp::EMPTY
 };
 pub const OP_SPACE_OR: BinaryOp = BinaryOp {
@@ -280,6 +309,7 @@ pub const OP_OR_LOGICAL: BinaryOp = BinaryOp {
     prec: 3,
     apply: apply_or_logical,
     commutative: true,
+    short_circuit: true,
     ..BinaryOp::EMPTY
 };
 pub const OP_AND: BinaryOp = BinaryOp {
@@ -287,6 +317,7 @@ pub const OP_AND: BinaryOp = BinaryOp {
     prec: 4,
     apply: apply_and,
     can_apply: can_apply_keyword,
+    short_circuit: true,
     ..BinaryOp::EMPTY
 };
 pub const OP_SPACE_AND: BinaryOp = BinaryOp {
@@ -314,6 +345,7 @@ pub const OP_AND_LOGICAL: BinaryOp = BinaryOp {
     prec: 4,
     apply: apply_and_logical,
     commutative: true,
+    short_circuit: true,
     ..BinaryOp::EMPTY
 };
 pub const OP_LT: BinaryOp = BinaryOp {

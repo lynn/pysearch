@@ -162,7 +162,7 @@ fn find_binary_operators(
                         .iter()
                         .zip(er.output.iter())
                         .enumerate()
-                        .all(|(i, (&ol, &or))| match (op.apply)(ol, or) {
+                        .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
                             Some(o) => matcher.match_one(i, o),
                             None => false,
                         })
@@ -240,7 +240,7 @@ fn find_unary_operators(
                         .output
                         .iter()
                         .enumerate()
-                        .all(|(i, &or)| matcher.match_one(i, (op.apply)(or)))
+                        .all(|(i, &or)| matcher.match_one(i, op.apply_(or)))
                         && matcher.match_final(None, er, op_idx)
                     {
                         println!("{op_idx}{er}");

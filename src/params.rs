@@ -105,3 +105,7 @@ pub const UNARY_OPERATORS: &[UnaryOp] = &[
 
 /// Match leaf expressions 1 output at a time to avoid unnecessary precalculations
 pub const MATCH_1BY1: bool = true;
+
+/// If set, e.g. to `Some(-159236)`, this arbitrary number is chosen to represent errors.
+/// That is, pysearch will pretend 1/0 = -159236, and -159236 * 2 = -159236, and so on.
+pub const ERROR_VALUE: Option<Num> = None;
