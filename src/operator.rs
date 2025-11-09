@@ -52,6 +52,7 @@ pub struct BinaryOp {
     pub name: &'static str,
     pub prec: Prec,
     pub apply: fn(Num, Num) -> Option<Num>,
+    pub apply_inverse: Option<fn(Num, Num) -> Option<Num>>,
     pub can_apply: fn(&Expr, &Expr) -> bool,
     pub commutative: bool,
     pub right_assoc: bool,
@@ -86,6 +87,7 @@ impl BinaryOp {
         name: "",
         prec: 0,
         apply: apply_add,
+        apply_inverse: None,
         can_apply: can_apply_binary_always,
         commutative: false,
         right_assoc: false,
@@ -107,6 +109,15 @@ impl BinaryOp {
             *l = self.apply_(*l, r)?;
         }
         Some(vl)
+    }
+
+    #[inline(always)]
+    pub fn vec_apply_inverse(&self, mut vr: Vector, goal: &Vector) -> Option<Vector> {
+        let apply_inverse = self.apply_inverse?;
+        for (r, &goal) in vr.iter_mut().zip(goal.iter()) {
+            *r = apply_inverse(*r, goal)?;
+        }
+        Some(vr)
     }
 
     #[inline(always)]
@@ -212,6 +223,13 @@ pub fn apply_sub(l: Num, r: Num) -> Option<Num> {
 }
 pub fn apply_mul(l: Num, r: Num) -> Option<Num> {
     Some(l * r)
+}
+pub fn apply_inverse_mul(r: Num, goal: Num) -> Option<Num> {
+    if r != 0 && goal % r == 0 {
+        Some(goal / r)
+    } else {
+        None
+    }
 }
 pub fn apply_mod_floor(l: Num, r: Num) -> Option<Num> {
     #[allow(unused_comparisons)]
@@ -397,6 +415,7 @@ pub const OP_BIT_XOR: BinaryOp = BinaryOp {
     name: "^",
     prec: 7,
     apply: apply_bit_xor,
+    apply_inverse: Some(apply_bit_xor),
     commutative: true,
     ..BinaryOp::EMPTY
 };
@@ -431,6 +450,7 @@ pub const OP_ADD: BinaryOp = BinaryOp {
     name: "+",
     prec: 10,
     apply: apply_add,
+    apply_inverse: Some(apply_sub),
     commutative: true,
     ..BinaryOp::EMPTY
 };
@@ -438,12 +458,14 @@ pub const OP_SUB: BinaryOp = BinaryOp {
     name: "-",
     prec: 10,
     apply: apply_sub,
+    apply_inverse: Some(apply_add),
     ..BinaryOp::EMPTY
 };
 pub const OP_MUL: BinaryOp = BinaryOp {
     name: "*",
     prec: 11,
     apply: apply_mul,
+    apply_inverse: Some(apply_inverse_mul),
     commutative: true,
     ..BinaryOp::EMPTY
 };

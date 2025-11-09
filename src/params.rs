@@ -109,3 +109,8 @@ pub const MATCH_1BY1: bool = true;
 /// If set, e.g. to `Some(-159236)`, this arbitrary number is chosen to represent errors.
 /// That is, pysearch will pretend 1/0 = -159236, and -159236 * 2 = -159236, and so on.
 pub const ERROR_VALUE: Option<Num> = None;
+
+/// Apply invertible operators on GOAL and cached expressions to find
+/// expressions up to 2*MAX_CACHE_LENGTH+1 length.
+/// Does not support custom Matcher.
+pub const ENABLE_INVERSE_SEARCH: bool = false;
