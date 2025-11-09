@@ -17,6 +17,7 @@ use params::*;
 use vec::Vector;
 
 use hashbrown::{hash_set::Entry, HashMap, HashSet};
+use rayon::prelude::*;
 use seq_macro::seq;
 use std::time::Instant;
 
@@ -352,8 +353,6 @@ fn find_expressions_multithread(
     mut_hashset_cache: &mut HashSetCache,
     n: usize,
 ) {
-    use rayon::prelude::*;
-
     let cache = &mut_cache;
     let hashset_cache = &mut_hashset_cache;
 
@@ -401,6 +400,27 @@ fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usiz
         }
     }
     add_to_cache(cn, cache, hashset_cache);
+}
+
+fn find_expressions_inverse(cache: &Cache, hashset_cache: &HashSetCache) {
+    cache
+        .par_iter()
+        .for_each(|level| {
+            level.par_iter().for_each(|er| {
+                seq!(idx in 0..100 {
+                    if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
+                        if let Some(output) = op.vec_apply_inverse(er.output.clone(), &Vector::from_slice(GOAL) ) {
+                            if let Some(el) = hashset_cache.get(&output) {
+                                let el = el.as_ref();
+                                if op.can_apply(el, er) {
+                                    println!("{el}{op_idx}{er}");
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        });
 }
 
 fn validate_input() {
@@ -455,6 +475,16 @@ fn main() {
         println!("Explored {count} expressions in {time:?}");
         let total_time = start.elapsed();
         println!("Total: {total_count} expressions in {total_time:?}\n");
+        if ENABLE_INVERSE_SEARCH && n == MAX_CACHE_LENGTH {
+            println!(
+                "Finding length {n}-{} with invertible operators...",
+                2 * n + 1
+            );
+            let inverse_start = Instant::now();
+            find_expressions_inverse(&cache, &hashset_cache);
+            let time = inverse_start.elapsed();
+            println!("Explored expressions with invertible operators in {time:?}\n");
+        }
     }
     println!();
 }

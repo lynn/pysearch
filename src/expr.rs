@@ -151,6 +151,12 @@ impl PartialEq for NonNullExpr {
     }
 }
 
+impl hashbrown::Equivalent<NonNullExpr> for Vector {
+    fn equivalent(&self, other: &NonNullExpr) -> bool {
+        self == &other.as_ref().output
+    }
+}
+
 // "3or" and ")or" are valid, but "nor" isn't.
 pub fn ok_before_keyword(e: &Expr) -> bool {
     match e.right {
