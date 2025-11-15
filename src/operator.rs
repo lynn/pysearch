@@ -218,6 +218,9 @@ pub fn apply_bit_shr_wrap(l: Num, r: Num) -> Option<Num> {
 pub fn apply_add(l: Num, r: Num) -> Option<Num> {
     Some(l + r)
 }
+pub fn apply_inverse_add(r: Num, goal: Num) -> Option<Num> {
+	Some(goal - r)
+}
 pub fn apply_sub(l: Num, r: Num) -> Option<Num> {
     Some(l - r)
 }
@@ -450,7 +453,7 @@ pub const OP_ADD: BinaryOp = BinaryOp {
     name: "+",
     prec: 10,
     apply: apply_add,
-    apply_inverse: Some(apply_sub),
+    apply_inverse: Some(apply_inverse_add),
     commutative: true,
     ..BinaryOp::EMPTY
 };
