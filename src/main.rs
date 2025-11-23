@@ -327,7 +327,7 @@ fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashS
                             *oe.as_mut_ptr() = cn.swap_remove(idx);
                         }
                     } else {
-                        e.replace();
+                        hashset_cache.replace(expr.into());
                         idx += 1;
                     }
                 } else {
