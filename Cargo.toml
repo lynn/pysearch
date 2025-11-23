@@ -11,9 +11,6 @@ overflow-checks = false
 [profile.release]
 opt-level = 3
 
-[features]
-simd = []
-
 [dependencies]
 rayon = "1.7.0"
 hashbrown = "0.14.0"
