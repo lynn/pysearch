@@ -15,8 +15,8 @@ opt-level = 3
 simd = []
 
 [dependencies]
-rayon = "1.7.0"
-hashbrown = "0.14.0"
+rayon = "1.11"
+hashbrown = "0.16"
 num-integer = "0.1.45"
 seq-macro = "0.3"
 
