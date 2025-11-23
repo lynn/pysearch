@@ -219,7 +219,7 @@ pub fn apply_add(l: Num, r: Num) -> Option<Num> {
     Some(l + r)
 }
 pub fn apply_inverse_add(r: Num, goal: Num) -> Option<Num> {
-	Some(goal - r)
+    Some(goal - r)
 }
 pub fn apply_sub(l: Num, r: Num) -> Option<Num> {
     Some(l - r)
