@@ -1,14 +1,9 @@
-#![cfg_attr(feature = "simd", feature(portable_simd))]
-
 pub mod expr;
 pub mod operator;
+pub mod vec;
 
 #[path = "params.rs"]
 pub mod params;
-
-#[cfg_attr(all(feature = "simd", feature = "portable_simd"), path = "vec_simd.rs")]
-#[cfg_attr(not(feature = "simd"), path = "vec.rs")]
-pub mod vec;
 
 use expr::{Expr, NonNullExpr, VarCount};
 use operator::*;
