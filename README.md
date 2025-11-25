@@ -6,8 +6,6 @@ Brute-force search tool for short Python expressions (for code golf).
 
 Edit the search parameters at the top of `src/params.rs`, then run `cargo run --release`.
 
-If your input/goal vectors have length ≤8, you can try `cargo +nightly run --release --features simd`.
-
 In `main.rs` you can edit the file used as the params module (default `#[path = "params.rs"]`). This way you can manage multiple configurations (e.g. make a `params-fizzbuzz.rs`).
 
 ## Example
