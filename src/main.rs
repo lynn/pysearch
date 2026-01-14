@@ -1,17 +1,18 @@
-pub mod expr;
-pub mod operator;
-pub mod vec;
+mod expr;
+mod matcher;
+mod operator;
+mod vec;
 
 #[path = "params.rs"]
-pub mod params;
+mod params;
 
 use expr::{Expr, NonNullExpr, VarCount};
+use matcher::Match as _;
 use operator::*;
 use params::*;
-
 use vec::Vector;
 
-use hashbrown::{hash_set::Entry, HashMap, HashSet};
+use hashbrown::{hash_set::Entry, HashSet};
 use rayon::prelude::*;
 use seq_macro::seq;
 use std::time::Instant;
@@ -68,7 +69,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    if !MATCH_1BY1 && is_leaf_expr(expr.op_idx, n) {
+    if !Matcher::MATCH_1BY1 && is_leaf_expr(expr.op_idx, n) {
         return;
     }
 
@@ -79,15 +80,8 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
             .zip(INPUTS.iter())
             .all(|(&c, i)| c == i.max_uses);
 
-    if cant_use_more_vars {
-        let mut mp: HashMap<Num, Num> = HashMap::new();
-        for i in 0..GOAL.len() {
-            if let Some(old) = mp.insert(expr.output[i], GOAL[i]) {
-                if old != GOAL[i] {
-                    return;
-                }
-            }
-        }
+    if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
+        return;
     }
 
     if n <= MAX_LENGTH - 2 {
@@ -151,7 +145,7 @@ fn find_binary_operators(
     seq!(idx in 0..100 {
         if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
             if op.name.len() == op_len && op.can_apply(el, er) {
-                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                if Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     let mut matcher = Matcher::new();
                     if el
                         .output
@@ -230,7 +224,7 @@ fn find_unary_operators(
     seq!(idx in 0..10 {
         if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
             if op.can_apply(er) {
-                if MATCH_1BY1 && is_leaf_expr(op_idx, n) {
+                if Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                     let mut matcher = Matcher::new();
                     if er
                         .output
