@@ -461,7 +461,7 @@ fn main() {
         let count = cache[n].len();
         total_count += count;
         let time = layer_start.elapsed();
-        println!("Explored {count} expressions in {time:?}");
+        println!("Cached {count} expressions in {time:?}");
         let total_time = start.elapsed();
         println!("Total: {total_count} expressions in {total_time:?}\n");
         if ENABLE_INVERSE_SEARCH && n == MAX_CACHE_LENGTH {
