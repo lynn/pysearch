@@ -283,8 +283,8 @@ fn find_parens_expressions(
 }
 
 fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
-    if n == 1 {
-        for (i, input) in INPUTS.iter().enumerate() {
+    for (i, input) in INPUTS.iter().enumerate() {
+        if n == input.name.len() {
             cn.push(Expr::variable(i, Vector::from_slice(input.vec)));
         }
     }
