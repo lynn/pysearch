@@ -401,7 +401,13 @@ fn find_expressions_inverse(cache: &Cache, hashset_cache: &HashSetCache) {
                         if let Some(output) = op.vec_apply_inverse(er.output.clone(), &Vector::from_slice(GOAL) ) {
                             if let Some(el) = hashset_cache.get(&output) {
                                 let el = el.as_ref();
-                                if op.can_apply(el, er) {
+                                if op.can_apply(el, er)
+                                    && el
+                                        .var_count
+                                        .iter()
+                                        .zip(er.var_count.iter())
+                                        .zip(INPUTS.iter())
+                                        .all(|((&l, &r), i)| l + r >= i.min_uses && l + r <= i.max_uses) {
                                     println!("{el}{op_idx}{er}");
                                 }
                             }
