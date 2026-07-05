@@ -132,15 +132,26 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
     e1: &Expr,
     e2: &Expr,
 ) {
-    if e1.is_literal() && e2.is_literal() { return; }
-    
+    if e1.is_literal() && e2.is_literal() {
+        return;
+    }
+
     let mut var_count = e2.var_count;
     let mut valid_vars = true;
-    for ((l, &r), input) in var_count.iter_mut().zip(e1.var_count.iter()).zip(INPUTS.iter()) {
+    for ((l, &r), input) in var_count
+        .iter_mut()
+        .zip(e1.var_count.iter())
+        .zip(INPUTS.iter())
+    {
         *l += r;
-        if *l > input.max_uses { valid_vars = false; break; }
+        if *l > input.max_uses {
+            valid_vars = false;
+            break;
+        }
     }
-    if !valid_vars || !can_use_required_vars(var_count, n) { return; }
+    if !valid_vars || !can_use_required_vars(var_count, n) {
+        return;
+    }
 
     let e1_out0 = e1.output[0];
     let e2_out0 = e2.output[0];
@@ -175,7 +186,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                     if let Some(output) = op.vec_apply(e1.output.clone(), &e2.output) {
                         save(cn, Expr::bin(e1.into(), e2.into(), op_idx, var_count, output), n, cache, hashset_cache);
                     }
-                }      
+                }
                 if BI_DIRECTIONAL {
                     if Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n) {
                         let mut matcher = Matcher::new();
@@ -204,7 +215,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                         if let Some(output) = op.vec_apply(e2.output.clone(), &e1.output) {
                             save(cn, Expr::bin(e2.into(), e1.into(), op_idx, var_count, output), n, cache, hashset_cache);
                         }
-                    }      
+                    }
                 }
             }
         }
@@ -228,7 +239,7 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
 
     for &(ol0, start, len) in &left_level.out0_groups {
         let mut valid_ops = 0u32;
-        
+
         seq!(idx in 0..32 {
             if let (Some(&_op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
                 if op.name.len() == OP_LEN {
@@ -241,21 +252,34 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
                 }
             }
         });
-        
-        if valid_ops == 0 { continue; }
-        
+
+        if valid_ops == 0 {
+            continue;
+        }
+
         for j in 0..len {
             let el = &left_cache[sorted_indices[(start + j) as usize] as usize];
-            if er_is_literal && el.is_literal() { continue; }
-            
+            if er_is_literal && el.is_literal() {
+                continue;
+            }
+
             let mut var_count = el.var_count;
             let mut valid_vars = true;
-            for ((l, &r), input) in var_count.iter_mut().zip(er_var_count.iter()).zip(INPUTS.iter()) {
+            for ((l, &r), input) in var_count
+                .iter_mut()
+                .zip(er_var_count.iter())
+                .zip(INPUTS.iter())
+            {
                 *l += r;
-                if *l > input.max_uses { valid_vars = false; break; }
+                if *l > input.max_uses {
+                    valid_vars = false;
+                    break;
+                }
             }
-            if !valid_vars || !can_use_required_vars(var_count, n) { continue; }
-            
+            if !valid_vars || !can_use_required_vars(var_count, n) {
+                continue;
+            }
+
             seq!(idx in 0..32 {
                 if (valid_ops & (1u32 << idx)) != 0 {
                     if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
@@ -315,19 +339,32 @@ fn find_binary_operators_chunked<const OP_LEN: usize>(
             }
         });
 
-        if valid_ops_e1_e2 == 0 && valid_ops_e2_e1 == 0 { continue; }
+        if valid_ops_e1_e2 == 0 && valid_ops_e2_e1 == 0 {
+            continue;
+        }
 
         for j in 0..len {
             let e2 = &left_cache[sorted_indices[(start + j) as usize] as usize];
-            if e1_is_literal && e2.is_literal() { continue; }
+            if e1_is_literal && e2.is_literal() {
+                continue;
+            }
 
             let mut var_count = e2.var_count;
             let mut valid_vars = true;
-            for ((l, &r), input) in var_count.iter_mut().zip(e1_var_count.iter()).zip(INPUTS.iter()) {
+            for ((l, &r), input) in var_count
+                .iter_mut()
+                .zip(e1_var_count.iter())
+                .zip(INPUTS.iter())
+            {
                 *l += r;
-                if *l > input.max_uses { valid_vars = false; break; }
+                if *l > input.max_uses {
+                    valid_vars = false;
+                    break;
+                }
             }
-            if !valid_vars || !can_use_required_vars(var_count, n) { continue; }
+            if !valid_vars || !can_use_required_vars(var_count, n) {
+                continue;
+            }
 
             seq!(idx in 0..32 {
                 if (valid_ops_e1_e2 & (1u32 << idx)) != 0 {
@@ -390,7 +427,7 @@ fn find_binary_expressions_left(
                 for el in &left_level.exprs {
                     find_binary_operators::<op_len, false>(cn, cache, hashset_cache, n, el, er);
                 }
-            } 
+            }
         }
     });
 }
@@ -427,7 +464,7 @@ fn find_unary_operators(
     if !can_use_required_vars(er.var_count, n) {
         return;
     }
-    
+
     let er_out0 = er.output[0];
 
     seq!(idx in 0..10 {
@@ -539,7 +576,8 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
     }
 
     let mut sorted_indices: Vec<u32> = (0..cn.len() as u32).collect();
-    sorted_indices.sort_unstable_by(|&a, &b| cn[a as usize].output[0].cmp(&cn[b as usize].output[0]));
+    sorted_indices
+        .sort_unstable_by(|&a, &b| cn[a as usize].output[0].cmp(&cn[b as usize].output[0]));
 
     let mut out0_groups = Vec::new();
     if !sorted_indices.is_empty() {
@@ -553,7 +591,11 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
                 last_val = val;
             }
         }
-        out0_groups.push((last_val, start as u32, (sorted_indices.len() - start) as u32));
+        out0_groups.push((
+            last_val,
+            start as u32,
+            (sorted_indices.len() - start) as u32,
+        ));
     }
 
     cache.push(CacheLevel {
@@ -689,7 +731,11 @@ fn validate_input() {
 fn main() {
     validate_input();
 
-    let mut cache: Cache = vec![CacheLevel { exprs: Vec::new(), sorted_indices: Vec::new(), out0_groups: Vec::new() }];
+    let mut cache: Cache = vec![CacheLevel {
+        exprs: Vec::new(),
+        sorted_indices: Vec::new(),
+        out0_groups: Vec::new(),
+    }];
     let mut hashset_cache: HashSetCache = HashSetCache::new();
     let mut total_count = 0;
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
