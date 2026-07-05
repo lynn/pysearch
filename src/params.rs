@@ -95,3 +95,7 @@ pub const ERROR_VALUE: Option<Num> = None;
 /// expressions up to 2*MAX_CACHE_LENGTH+1 length.
 /// Does not support custom Matcher.
 pub const ENABLE_INVERSE_SEARCH: bool = false;
+
+/// If set to true, optimizes the search by grouping cached expressions by their first output value (`output[0]`).
+/// This heuristic works better when `output[0]` probability of matching is low.
+pub const EARLY_FIRST_ELEMENT_MATCH: bool = true;
