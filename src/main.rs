@@ -64,7 +64,7 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
 }
 
 fn save(level: &mut Vec<Expr>, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
-    if Matcher::new().match_one(0, expr.output[0]) {
+    if !EARLY_FIRST_ELEMENT_MATCH || Matcher::new().match_one(0, expr.output[0]) {
         let uses_required_vars = expr
             .var_count
             .iter()
