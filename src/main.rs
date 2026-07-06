@@ -19,8 +19,7 @@ use std::time::Instant;
 
 struct CacheLevel {
     exprs: Vec<Expr>,
-    sorted_indices: Vec<u32>,
-    out0_groups: Vec<(Num, u32, u32)>,
+    out0_groups: Vec<(Num, u32)>,
 }
 
 type Cache = Vec<CacheLevel>;
@@ -238,11 +237,14 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
     er: &Expr,
 ) {
     let left_cache = &left_level.exprs;
-    let sorted_indices = &left_level.sorted_indices;
     let er_is_literal = er.is_literal();
     let er_out0 = er.output[0];
 
-    for &(ol0, start, len) in &left_level.out0_groups {
+    let mut start = 0u32;
+    for &(ol0, len) in &left_level.out0_groups {
+        let current_start = start;
+        start += len;
+
         let mut valid_ops = 0u32;
 
         seq!(idx in 0..32 {
@@ -263,7 +265,7 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
         }
 
         for j in 0..len {
-            let el = &left_cache[sorted_indices[(start + j) as usize] as usize];
+            let el = &left_cache[(current_start + j) as usize];
             if er_is_literal && el.is_literal() {
                 continue;
             }
@@ -307,11 +309,14 @@ fn find_binary_operators_chunked<const OP_LEN: usize>(
     e1: &Expr,
 ) {
     let left_cache = &left_level.exprs;
-    let sorted_indices = &left_level.sorted_indices;
     let e1_is_literal = e1.is_literal();
     let e1_out0 = e1.output[0];
 
-    for &(e2_out0, start, len) in &left_level.out0_groups {
+    let mut start = 0u32;
+    for &(e2_out0, len) in &left_level.out0_groups {
+        let current_start = start;
+        start += len;
+
         let mut valid_ops_e1_e2 = 0u32;
         let mut valid_ops_e2_e1 = 0u32;
 
@@ -335,7 +340,7 @@ fn find_binary_operators_chunked<const OP_LEN: usize>(
         }
 
         for j in 0..len {
-            let e2 = &left_cache[sorted_indices[(start + j) as usize] as usize];
+            let e2 = &left_cache[(current_start + j) as usize];
             if e1_is_literal && e2.is_literal() {
                 continue;
             }
@@ -548,37 +553,55 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
             }
             Entry::Vacant(e) => {
                 e.insert();
+                if hashset_cache.len() == hashset_cache.capacity() {
+                    cn.shrink_to_fit();
+                }
                 idx += 1;
             }
         }
     }
 
-    let mut sorted_indices: Vec<u32> = (0..cn.len() as u32).collect();
-    sorted_indices
-        .sort_unstable_by(|&a, &b| cn[a as usize].output[0].cmp(&cn[b as usize].output[0]));
+    if EARLY_FIRST_ELEMENT_MATCH {
+        for expr in &cn {
+            let expr_key: NonNullExpr = expr.into();
+            let expr_ptr = expr_key.as_ptr();
+            if let Entry::Occupied(e) = hashset_cache.entry(expr_key) {
+                if e.get().as_ptr() == expr_ptr {
+                    e.remove();
+                }
+            }
+        }
+        cn.sort_unstable_by(|a, b| a.output[0].cmp(&b.output[0]));
+        for expr in &cn {
+            hashset_cache.insert(expr.into());
+        }
+    }
+
+    cn.shrink_to_fit();
+    hashset_cache.shrink_to_fit();
 
     let mut out0_groups = Vec::new();
-    if !sorted_indices.is_empty() {
+    if EARLY_FIRST_ELEMENT_MATCH && !cn.is_empty(){
         let mut start = 0;
-        let mut last_val = cn[sorted_indices[0] as usize].output[0];
-        for i in 1..sorted_indices.len() {
-            let val = cn[sorted_indices[i] as usize].output[0];
+        let mut last_val = cn[0].output[0];
+        for i in 1..cn.len() {
+            let val = cn[i].output[0];
             if val != last_val {
-                out0_groups.push((last_val, start as u32, (i - start) as u32));
+                out0_groups.push((last_val, (i - start) as u32));
                 start = i;
                 last_val = val;
             }
         }
         out0_groups.push((
             last_val,
-            start as u32,
-            (sorted_indices.len() - start) as u32,
+            (cn.len() - start) as u32,
         ));
     }
 
+    out0_groups.shrink_to_fit();
+
     cache.push(CacheLevel {
         exprs: cn,
-        sorted_indices,
         out0_groups,
     });
 }
@@ -711,7 +734,6 @@ fn main() {
 
     let mut cache: Cache = vec![CacheLevel {
         exprs: Vec::new(),
-        sorted_indices: Vec::new(),
         out0_groups: Vec::new(),
     }];
     let mut hashset_cache: HashSetCache = HashSetCache::new();
