@@ -8,6 +8,10 @@ Edit the search parameters at the top of `src/params.rs`, then run `cargo run --
 
 In `main.rs` you can edit the file used as the params module (default `#[path = "params.rs"]`). This way you can manage multiple configurations (e.g. make a `params-fizzbuzz.rs`).
 
+### Flags
+
+- `--stop-at-first-length`: terminate after the first length at which any matching expression is found, instead of continuing up to `MAX_LENGTH`. Useful when you only want the shortest solution(s), e.g. `cargo run --release -- --stop-at-first-length`.
+
 ## Example
 
 Let's golf this Python code!
