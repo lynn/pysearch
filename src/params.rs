@@ -9,9 +9,16 @@ pub struct Input {
     pub max_uses: u8,
 }
 
+// Test input: map bytes of "pysea" to 1,2,3,4,5. Should find 1^7&n*n>>4 at length 10
 pub const INPUTS: &[Input] = &[Input {
     name: "n",
-    vec: &['E' as i32, 'W' as i32, 'N' as i32, 'S' as i32],
+    vec: &[
+        b'p' as i32,
+        b'y' as i32,
+        b's' as i32,
+        b'e' as i32,
+        b'a' as i32,
+    ],
     min_uses: 1,
     max_uses: 255,
 }];
@@ -30,10 +37,10 @@ impl Match for Matcher {
     }
 }
 
-pub const GOAL: &[Num] = &[1, -1, 0, 0];
+pub const GOAL: &[Num] = &[1, 2, 3, 4, 5];
 
-pub const MAX_LENGTH: usize = 9;
-pub const MAX_CACHE_LENGTH: usize = 5;
+pub const MAX_LENGTH: usize = 14;
+pub const MAX_CACHE_LENGTH: usize = 10;
 pub const MIN_MULTITHREAD_LENGTH: usize = MAX_CACHE_LENGTH + 1;
 pub const LITERALS: &[Num] = &[
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,

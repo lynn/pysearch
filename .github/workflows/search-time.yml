@@ -1,0 +1,55 @@
+name: Search time
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  search-time:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build (release)
+      run: cargo build --release --verbose
+
+    - name: Time the search
+      run: |
+        # `--stop-early` halts at the first length that yields a solution, so
+        # this measures how long it takes to find the (unique shortest) solution.
+        start=$(date +%s.%N)
+        ./target/release/pysearch --stop-early | tee search.log
+        end=$(date +%s.%N)
+
+        elapsed=$(awk "BEGIN { printf \"%.3f\", $end - $start }")
+
+        # The solution lines are the only ones that aren't status/log output.
+        solution=$(grep -vE '^(Cached|Total|Finding|sizeof|Found|$)' search.log || true)
+
+        if [ -z "$solution" ]; then
+          echo "::error::No solution was found for the current parameters."
+          exit 1
+        fi
+
+        echo "Solution:"
+        echo "$solution"
+        echo "Time to find the solution: ${elapsed}s"
+
+        {
+          echo "### pysearch — time to find the solution"
+          echo ""
+          echo "**Time:** ${elapsed}s"
+          echo ""
+          echo "**Solution(s):**"
+          echo ""
+          echo '```'
+          echo "$solution"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"

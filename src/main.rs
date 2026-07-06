@@ -15,6 +15,7 @@ use vec::Vector;
 use hashbrown::{hash_set::Entry, HashSet};
 use rayon::prelude::*;
 use seq_macro::seq;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 struct CacheLevel {
@@ -37,6 +38,19 @@ const fn has_unlimited_var() -> bool {
         i += 1;
     }
     false
+}
+
+/// Set to `true` the moment any matching expression is printed. Used by the
+/// `--stop-early` flag to terminate after the first length that
+/// yields a match. Written from parallel worker threads, so it's atomic.
+static FOUND_ANY: AtomicBool = AtomicBool::new(false);
+
+/// Print a matching expression and record that a match was found.
+macro_rules! print_solution {
+    ($($arg:tt)*) => {{
+        FOUND_ANY.store(true, Ordering::Relaxed);
+        println!($($arg)*);
+    }};
 }
 
 fn positive_integer_length(mut k: Num) -> usize {
@@ -71,7 +85,7 @@ fn save(level: &mut Vec<Expr>, expr: Expr, n: usize, cache: &Cache, hashset_cach
             .all(|(&c, i)| c >= i.min_uses);
 
         if uses_required_vars && Matcher::match_all(&expr) {
-            println!("{expr}");
+            print_solution!("{expr}");
             return;
         }
     }
@@ -173,7 +187,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                                     Some(o) => matcher.match_one(i, o),
                                     None => false,
                                 }) && matcher.match_final(Some(e1), e2, op_idx) {
-                                    println!("{e1}{op_idx}{e2}");
+                                    print_solution!("{e1}{op_idx}{e2}");
                                 }
                             }
                         }
@@ -183,7 +197,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                                 Some(o) => matcher.match_one(i, o),
                                 None => false,
                             }) && matcher.match_final(Some(e1), e2, op_idx) {
-                                println!("{e1}{op_idx}{e2}");
+                                print_solution!("{e1}{op_idx}{e2}");
                             }
                         }
                     }
@@ -202,7 +216,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                                         Some(o) => matcher.match_one(i, o),
                                         None => false,
                                     }) && matcher.match_final(Some(e2), e1, op_idx) {
-                                        println!("{e2}{op_idx}{e1}");
+                                        print_solution!("{e2}{op_idx}{e1}");
                                     }
                                 }
                             }
@@ -212,7 +226,7 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
                                     Some(o) => matcher.match_one(i, o),
                                     None => false,
                                 }) && matcher.match_final(Some(e2), e1, op_idx) {
-                                    println!("{e2}{op_idx}{e1}");
+                                    print_solution!("{e2}{op_idx}{e1}");
                                 }
                             }
                         }
@@ -459,7 +473,7 @@ fn find_unary_operators(
                     if er.output.iter().enumerate().skip(1).all(|(i, &or)| matcher.match_one(i, op.apply_(or)))
                         && matcher.match_final(None, er, op_idx)
                     {
-                        println!("{op_idx}{er}");
+                        print_solution!("{op_idx}{er}");
                     }
                 }
             } else {
@@ -689,7 +703,7 @@ fn find_expressions_inverse(cache: &Cache, hashset_cache: &HashSetCache) {
                                         .zip(er.var_count.iter())
                                         .zip(INPUTS.iter())
                                         .all(|((&l, &r), i)| l + r >= i.min_uses && l + r <= i.max_uses) {
-                                    println!("{el}{op_idx}{er}");
+                                    print_solution!("{el}{op_idx}{er}");
                                 }
                             }
                         }
@@ -726,7 +740,24 @@ fn validate_input() {
     }
 }
 
+fn parse_args() -> bool {
+    let mut stop_early = false;
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "-s" | "--stop-early" => stop_early = true,
+            other => {
+                eprintln!("Unknown argument: {other}");
+                eprintln!("Usage: pysearch [-s|--stop-early]");
+                std::process::exit(2);
+            }
+        }
+    }
+    stop_early
+}
+
 fn main() {
+    let stop_early = parse_args();
+
     validate_input();
 
     let mut cache: Cache = vec![CacheLevel {
@@ -763,6 +794,10 @@ fn main() {
             find_expressions_inverse(&cache, &hashset_cache);
             let time = inverse_start.elapsed();
             println!("Explored expressions with invertible operators in {time:?}\n");
+        }
+        if stop_early && FOUND_ANY.load(Ordering::Relaxed) {
+            println!("Found expression(s) at length {n}; stopping.");
+            break;
         }
     }
     println!();
