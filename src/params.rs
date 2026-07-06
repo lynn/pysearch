@@ -12,7 +12,13 @@ pub struct Input {
 // Test input: map bytes of "pysea" to 1,2,3,4,5. Should find 1^7&n*n>>4 at length 10
 pub const INPUTS: &[Input] = &[Input {
     name: "n",
-    vec: &[b'p' as i32, b'y' as i32, b's' as i32, b'e' as i32, b'a' as i32],
+    vec: &[
+        b'p' as i32,
+        b'y' as i32,
+        b's' as i32,
+        b'e' as i32,
+        b'a' as i32,
+    ],
     min_uses: 1,
     max_uses: 255,
 }];
