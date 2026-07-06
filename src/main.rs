@@ -581,7 +581,7 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
     hashset_cache.shrink_to_fit();
 
     let mut out0_groups = Vec::new();
-    if EARLY_FIRST_ELEMENT_MATCH && !cn.is_empty(){
+    if EARLY_FIRST_ELEMENT_MATCH && !cn.is_empty() {
         let mut start = 0;
         let mut last_val = cn[0].output[0];
         for i in 1..cn.len() {
@@ -592,10 +592,7 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
                 last_val = val;
             }
         }
-        out0_groups.push((
-            last_val,
-            (cn.len() - start) as u32,
-        ));
+        out0_groups.push((last_val, (cn.len() - start) as u32));
     }
 
     out0_groups.shrink_to_fit();
