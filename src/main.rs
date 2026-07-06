@@ -123,6 +123,25 @@ fn save(level: &mut Vec<Expr>, expr: Expr, n: usize, cache: &Cache, hashset_cach
     level.push(expr);
 }
 
+fn get_binary_expr_var_count(e1: &Expr, e2: &Expr, length: usize) -> Option<VarCount> {
+    let mut var_count = e1.var_count;
+    for ((c1, c2), input) in var_count
+        .iter_mut()
+        .zip(e2.var_count.iter())
+        .zip(INPUTS.iter())
+    {
+        *c1 += c2;
+        if *c1 > input.max_uses {
+            return None;
+        }
+    }
+    if can_use_required_vars(var_count, length) {
+        Some(var_count)
+    } else {
+        None
+    }
+}
+
 #[inline(always)]
 fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
     cn: &mut Vec<Expr>,
@@ -136,22 +155,9 @@ fn find_binary_operators<const OP_LEN: usize, const BI_DIRECTIONAL: bool>(
         return;
     }
 
-    let mut var_count = e2.var_count;
-    let mut valid_vars = true;
-    for ((l, &r), input) in var_count
-        .iter_mut()
-        .zip(e1.var_count.iter())
-        .zip(INPUTS.iter())
-    {
-        *l += r;
-        if *l > input.max_uses {
-            valid_vars = false;
-            break;
-        }
-    }
-    if !valid_vars || !can_use_required_vars(var_count, n) {
+    let Some(var_count) = get_binary_expr_var_count(e1, e2, n) else {
         return;
-    }
+    };
 
     let e1_out0 = e1.output[0];
     let e2_out0 = e2.output[0];
@@ -234,7 +240,6 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
     let left_cache = &left_level.exprs;
     let sorted_indices = &left_level.sorted_indices;
     let er_is_literal = er.is_literal();
-    let er_var_count = er.var_count;
     let er_out0 = er.output[0];
 
     for &(ol0, start, len) in &left_level.out0_groups {
@@ -263,22 +268,9 @@ fn find_binary_operators_chunked_left<const OP_LEN: usize>(
                 continue;
             }
 
-            let mut var_count = el.var_count;
-            let mut valid_vars = true;
-            for ((l, &r), input) in var_count
-                .iter_mut()
-                .zip(er_var_count.iter())
-                .zip(INPUTS.iter())
-            {
-                *l += r;
-                if *l > input.max_uses {
-                    valid_vars = false;
-                    break;
-                }
-            }
-            if !valid_vars || !can_use_required_vars(var_count, n) {
+            let Some(var_count) = get_binary_expr_var_count(el, er, n) else {
                 continue;
-            }
+            };
 
             seq!(idx in 0..32 {
                 if (valid_ops & (1u32 << idx)) != 0 {
@@ -317,7 +309,6 @@ fn find_binary_operators_chunked<const OP_LEN: usize>(
     let left_cache = &left_level.exprs;
     let sorted_indices = &left_level.sorted_indices;
     let e1_is_literal = e1.is_literal();
-    let e1_var_count = e1.var_count;
     let e1_out0 = e1.output[0];
 
     for &(e2_out0, start, len) in &left_level.out0_groups {
@@ -349,22 +340,9 @@ fn find_binary_operators_chunked<const OP_LEN: usize>(
                 continue;
             }
 
-            let mut var_count = e2.var_count;
-            let mut valid_vars = true;
-            for ((l, &r), input) in var_count
-                .iter_mut()
-                .zip(e1_var_count.iter())
-                .zip(INPUTS.iter())
-            {
-                *l += r;
-                if *l > input.max_uses {
-                    valid_vars = false;
-                    break;
-                }
-            }
-            if !valid_vars || !can_use_required_vars(var_count, n) {
+            let Some(var_count) = get_binary_expr_var_count(e1, e2, n) else {
                 continue;
-            }
+            };
 
             seq!(idx in 0..32 {
                 if (valid_ops_e1_e2 & (1u32 << idx)) != 0 {
