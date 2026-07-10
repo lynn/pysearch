@@ -10,13 +10,11 @@ overflow-checks = false
 
 [profile.release]
 opt-level = 3
+codegen-units = 1
+panic = "abort"
 
 [dependencies]
 rayon = "1.11"
 hashbrown = "0.16"
 num-integer = "0.1.45"
 seq-macro = "0.3"
-
-# Doesn't seem to help much:
-# [profile.release]
-# lto = true

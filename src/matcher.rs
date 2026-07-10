@@ -8,8 +8,13 @@ pub trait Match: Sized {
     /// precalculations.
     const MATCH_1BY1: bool = true;
 
+    /// If set to true, optimizes the search by grouping cached expressions by their first output value (`output[0]`).
+    /// This heuristic works better when `output[0]` probability of matching is low.
+    const GROUP_BY_FIRST_OUTPUT: bool = true;
+
     fn new() -> Self;
 
+    #[inline(always)]
     fn match_one(&mut self, index: usize, output: Num) -> bool {
         output == GOAL[index]
     }
