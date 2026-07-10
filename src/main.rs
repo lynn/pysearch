@@ -734,35 +734,42 @@ fn find_expressions_multithread(
                 })
             })
             .chain(
-                (if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
-                    &cache[n - 2..n - 1]
-                } else {
-                    &[]
-                })
-                .par_iter()
-                .flat_map(|level| par_iter_groups(level))
-                .map(move |(group, out0)| {
+                std::iter::once_with(|| {
                     let mut cn = Vec::new();
-                    find_parens_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
+                    if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
+                        for (group, out0) in iter_groups(&cache[n - 2]) {
+                            find_parens_expressions_grouped(
+                                &mut cn,
+                                cache,
+                                hashset_cache,
+                                n,
+                                group,
+                                out0,
+                            );
+                        }
+                    }
                     cn
-                }),
+                })
+                .par_bridge(),
             )
             .chain(
-                (if n >= 2 { &cache[n - 1..n] } else { &[] })
-                    .par_iter()
-                    .flat_map(|level| par_iter_groups(level))
-                    .map(move |(group, out0)| {
-                        let mut cn = Vec::new();
-                        find_unary_expressions_grouped(
-                            &mut cn,
-                            cache,
-                            hashset_cache,
-                            n,
-                            group,
-                            out0,
-                        );
-                        cn
-                    }),
+                std::iter::once_with(|| {
+                    let mut cn = Vec::new();
+                    if n >= 2 {
+                        for (group, out0) in iter_groups(&cache[n - 1]) {
+                            find_unary_expressions_grouped(
+                                &mut cn,
+                                cache,
+                                hashset_cache,
+                                n,
+                                group,
+                                out0,
+                            );
+                        }
+                    }
+                    cn
+                })
+                .par_bridge(),
             )
             .flatten_iter()
             .collect();
