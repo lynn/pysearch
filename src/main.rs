@@ -396,7 +396,12 @@ fn find_binary_operators_grouped<const OP_IDX: usize>(
     hashset_cache: &HashSetCache,
     new_group: &mut Vec<Expr>,
 ) {
-    let (&op_idx, op) = unsafe { (OP_BINARY_INDEX_TABLE.get_unchecked(OP_IDX), BINARY_OPERATORS.get_unchecked(OP_IDX)) };
+    let (&op_idx, op) = unsafe {
+        (
+            OP_BINARY_INDEX_TABLE.get_unchecked(OP_IDX),
+            BINARY_OPERATORS.get_unchecked(OP_IDX),
+        )
+    };
 
     let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
 
@@ -424,20 +429,16 @@ fn find_binary_operators_grouped<const OP_IDX: usize>(
             }
 
             let (left, right) = (e1, e2);
-            
+
             if op.can_apply(left, right) {
                 if check_match {
                     let mut matcher = Matcher::new();
-                    if left
-                        .output
-                        .iter()
-                        .zip(right.output.iter())
-                        .enumerate()
-                        .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
+                    if left.output.iter().zip(right.output.iter()).enumerate().all(
+                        |(i, (&ol, &or))| match op.apply_(ol, or) {
                             Some(o) => matcher.match_one(i, o),
                             None => false,
-                        })
-                        && matcher.match_final(Some(left), right, op_idx)
+                        },
+                    ) && matcher.match_final(Some(left), right, op_idx)
                     {
                         println!("{left}{op_idx}{right}");
                     }
@@ -683,19 +684,21 @@ fn find_expressions_multithread(
         cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
             .into_par_iter()
             .flat_map(|k| {
-                iter_groups(&cache[k]).par_bridge().map(move |(group, out0)| {
-                    let mut cn = Vec::new();
-                    find_binary_expressions_grouped::<false>(
-                        &mut cn,
-                        cache,
-                        hashset_cache,
-                        n,
-                        k,
-                        group,
-                        out0,
-                    );
-                    cn
-                })
+                iter_groups(&cache[k])
+                    .par_bridge()
+                    .map(move |(group, out0)| {
+                        let mut cn = Vec::new();
+                        find_binary_expressions_grouped::<false>(
+                            &mut cn,
+                            cache,
+                            hashset_cache,
+                            n,
+                            k,
+                            group,
+                            out0,
+                        );
+                        cn
+                    })
             })
             .chain(
                 (if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {

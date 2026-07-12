@@ -42,8 +42,7 @@ pub const GOAL: &[Num] = &[1, 2, 3, 4, 5];
 pub const MAX_LENGTH: usize = 14;
 pub const MAX_CACHE_LENGTH: usize = 9;
 pub const MIN_MULTITHREAD_LENGTH: usize = MAX_CACHE_LENGTH + 1;
-pub const LITERALS: &[Num] = &[
-];
+pub const LITERALS: &[Num] = &[];
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
 pub const MAX_LITERAL: Num = 40;
 
