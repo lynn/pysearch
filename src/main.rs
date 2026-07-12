@@ -388,68 +388,47 @@ fn save_group(
 #[inline(always)]
 fn find_binary_operators_grouped<const OP_IDX: usize>(
     cn: &mut Vec<Expr>,
-    group_1: &[Expr],
-    group_2: &[Expr],
+    group_left: &[Expr],
+    group_right: &[Expr],
     n: usize,
     out0: Num,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     new_group: &mut Vec<Expr>,
 ) {
-    let (&op_idx, op) = unsafe {
-        (
-            OP_BINARY_INDEX_TABLE.get_unchecked(OP_IDX),
-            BINARY_OPERATORS.get_unchecked(OP_IDX),
-        )
-    };
+    let (&op_idx, op) = (
+        OP_BINARY_INDEX_TABLE.get(OP_IDX).unwrap(),
+        BINARY_OPERATORS.get(OP_IDX).unwrap(),
+    );
 
     let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
 
-    for e1 in group_1 {
-        for e2 in group_2 {
-            if e1.is_literal() && e2.is_literal() {
+    for el in group_left {
+        for er in group_right {
+            if el.is_literal() && er.is_literal() {
                 continue;
             }
-
-            let mut var_count = e1.var_count;
-            let mut exceeds = false;
-            for ((c1, c2), input) in var_count
-                .iter_mut()
-                .zip(e2.var_count.iter())
-                .zip(INPUTS.iter())
-            {
-                *c1 += c2;
-                if *c1 > input.max_uses {
-                    exceeds = true;
-                    break;
-                }
-            }
-            if exceeds || !can_use_required_vars(var_count, n) {
-                continue;
-            }
-
-            let (left, right) = (e1, e2);
-
-            if op.can_apply(left, right) {
+            let Some(var_count) = add_var_counts(el.var_count, er.var_count, n) else {
+                return;
+            };
+            if op.can_apply(el, er) {
                 if check_match {
                     let mut matcher = Matcher::new();
-                    if left.output.iter().zip(right.output.iter()).enumerate().all(
-                        |(i, (&ol, &or))| match op.apply_(ol, or) {
+                    if el
+                        .output
+                        .iter()
+                        .zip(er.output.iter())
+                        .enumerate()
+                        .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
                             Some(o) => matcher.match_one(i, o),
                             None => false,
-                        },
-                    ) && matcher.match_final(Some(left), right, op_idx)
+                        })
+                        && matcher.match_final(Some(el), er, op_idx)
                     {
-                        println!("{left}{op_idx}{right}");
+                        println!("{el}{op_idx}{er}");
                     }
-                } else if let Some(output) = op.vec_apply(left.output.clone(), &right.output) {
-                    new_group.push(Expr::bin(
-                        left.into(),
-                        right.into(),
-                        op_idx,
-                        var_count,
-                        output,
-                    ));
+                } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    new_group.push(Expr::bin(el.into(), er.into(), op_idx, var_count, output));
 
                     if new_group.len() == MAX_GROUP_SIZE {
                         save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
