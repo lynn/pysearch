@@ -1,4 +1,4 @@
 [build]
 rustflags = [
-    "-C", "llvm-args=-unroll-threshold=400",
+    "-C", "llvm-args=-unroll-threshold=500",
 ]

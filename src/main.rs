@@ -71,21 +71,17 @@ fn iter_groups<'a>(cache_level: &'a CacheLevel) -> impl Iterator<Item = (&'a [Ex
     })
 }
 
-#[inline(always)]
-fn par_iter_groups<'a>(
-    cache_level: &'a CacheLevel,
-) -> impl ParallelIterator<Item = (&'a [Expr], Num)> {
-    let mut starts = Vec::with_capacity(cache_level.out0_groups.len());
-    let mut current = 0;
-    for &(_, len) in &cache_level.out0_groups {
-        starts.push(current);
-        current += len as usize;
+fn add_var_counts(mut vc1: VarCount, vc2: VarCount, length: usize) -> Option<VarCount> {
+    for ((c1, c2), input) in vc1.iter_mut().zip(vc2).zip(INPUTS.iter()) {
+        *c1 += c2;
+        if *c1 > input.max_uses {
+            return None;
+        }
     }
-    cache_level
-        .out0_groups
-        .par_iter()
-        .zip(starts.into_par_iter())
-        .map(move |(&(out0, len), start)| (&cache_level.exprs[start..start + len as usize], out0))
+    if !can_use_required_vars(vc1, length) {
+        return None;
+    }
+    Some(vc1)
 }
 
 // -----------------------------------------------------------------------------
@@ -163,22 +159,9 @@ fn find_binary_operators_single(
     if er.is_literal() && el.is_literal() {
         return;
     }
-    let mut var_count = el.var_count;
-    let mut exceeds = false;
-    for ((l, &r), i) in var_count
-        .iter_mut()
-        .zip(er.var_count.iter())
-        .zip(INPUTS.iter())
-    {
-        *l += r;
-        if *l > i.max_uses {
-            exceeds = true;
-            break;
-        }
-    }
-    if exceeds || !can_use_required_vars(var_count, n) {
+    let Some(var_count) = add_var_counts(el.var_count, er.var_count, n) else {
         return;
-    }
+    };
     seq!(idx in 0..100 {
         if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
             if op.name.len() == op_len && op.can_apply(el, er) {
@@ -220,15 +203,14 @@ fn find_binary_expressions_single<const BI_DIRECTIONAL: bool>(
     e_fixed: &Expr,
 ) {
     seq!(op_len in 0..=5 {
-        if n > k + op_len {
-            for e_other in &cache[n - k - op_len].exprs {
-                if BI_DIRECTIONAL {
-                    find_binary_operators_single(cn, cache, hashset_cache, n, e_fixed, e_other, op_len);
-                    find_binary_operators_single(cn, cache, hashset_cache, n, e_other, e_fixed, op_len);
-                } else {
-                    find_binary_operators_single(cn, cache, hashset_cache, n, e_other, e_fixed, op_len);
-                }
+        if n <= k + op_len {
+            return;
+        }
+        for e_other in &cache[n - k - op_len].exprs {
+            if BI_DIRECTIONAL {
+                find_binary_operators_single(cn, cache, hashset_cache, n, e_fixed, e_other, op_len);
             }
+            find_binary_operators_single(cn, cache, hashset_cache, n, e_other, e_fixed, op_len);
         }
     });
 }
@@ -311,7 +293,7 @@ fn find_parens_expressions_single(
 
 fn save_group(
     cn: &mut Vec<Expr>,
-    group: Vec<Expr>,
+    group: &mut Vec<Expr>,
     out0: Num,
     n: usize,
     cache: &Cache,
@@ -321,54 +303,60 @@ fn save_group(
         return;
     }
 
-    let mut valid_exprs = Vec::with_capacity(group.len());
-    let mut matcher = Matcher::new();
-    let is_out0_match = matcher.match_one(0, out0);
+    for expr in group.iter() {
+        let uses_required_vars = expr
+            .var_count
+            .iter()
+            .zip(INPUTS.iter())
+            .all(|(&c, i)| c >= i.min_uses);
 
-    for expr in &group {
-        if is_out0_match {
-            let uses_required_vars = expr
-                .var_count
-                .iter()
-                .zip(INPUTS.iter())
-                .all(|(&c, i)| c >= i.min_uses);
-
-            if uses_required_vars && Matcher::match_all(expr) {
-                println!("{expr}");
-                continue;
-            }
+        if uses_required_vars && Matcher::match_all(expr) {
+            println!("{expr}");
         }
     }
 
-    if is_leaf_expr(group[0].op_idx, n) {
+    if !Matcher::MATCH_1BY1 && is_leaf_expr(group[0].op_idx, n) {
+        group.clear();
         return;
     }
 
-    for expr in group {
-        let cant_use_more_vars = !HAS_UNLIMITED_VAR
-            && expr
-                .var_count
-                .iter()
-                .zip(INPUTS.iter())
-                .all(|(&c, i)| c == i.max_uses);
+    let mut write_idx = 0;
 
-        if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
-            continue;
-        }
+    for i in 0..group.len() {
+        let remove = {
+            let expr = &group[i];
+            let cant_use_more_vars = !HAS_UNLIMITED_VAR
+                && expr
+                    .var_count
+                    .iter()
+                    .zip(INPUTS.iter())
+                    .all(|(&c, inp)| c == inp.max_uses);
 
-        if n <= MAX_LENGTH - 3 {
-            let expr_ptr: NonNullExpr = (&expr).into();
-            if let Some(e) = hashset_cache.get(&expr_ptr) {
-                if e.as_ref().prec() >= expr.prec() {
-                    continue;
+            if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
+                true
+            } else if n <= MAX_LENGTH - 3 {
+                let expr_ptr: NonNullExpr = expr.into();
+                if let Some(e) = hashset_cache.get(&expr_ptr) {
+                    e.as_ref().prec() >= expr.prec()
+                } else {
+                    false
                 }
+            } else {
+                false
             }
-        }
+        };
 
-        valid_exprs.push(expr);
+        if !remove {
+            if write_idx != i {
+                group.swap(write_idx, i);
+            }
+            write_idx += 1;
+        }
     }
 
-    if valid_exprs.is_empty() {
+    group.truncate(write_idx);
+
+    if group.is_empty() {
         return;
     }
 
@@ -380,42 +368,42 @@ fn save_group(
                 hashset_cache,
                 dfs_len,
                 n,
-                &valid_exprs,
+                group,
                 out0,
             );
         }
         if n + 1 <= MAX_LENGTH {
-            find_unary_expressions_grouped(cn, cache, hashset_cache, n + 1, &valid_exprs, out0);
+            find_unary_expressions_grouped(cn, cache, hashset_cache, n + 1, group, out0);
         }
         if !is_leaf_expr(OP_INDEX_PARENS, n + 2) {
-            find_parens_expressions_grouped(cn, cache, hashset_cache, n + 2, &valid_exprs, out0);
+            find_parens_expressions_grouped(cn, cache, hashset_cache, n + 2, group, out0);
         }
     } else {
-        cn.extend(valid_exprs);
+        // Appending drains `group` into `cn`
+        cn.append(group);
     }
+
+    // Ensure the group is cleared out at the end for the caller
+    group.clear();
 }
 
 #[inline(always)]
-fn find_binary_operators_grouped(
+fn find_binary_operators_grouped<const OP_IDX: usize>(
     cn: &mut Vec<Expr>,
-    group: &[Expr],
-    cache_level: &CacheLevel,
-    start: usize,
-    len: usize,
-    op: &BinaryOp,
-    op_idx: OpIndex,
+    group_1: &[Expr],
+    group_2: &[Expr],
     n: usize,
-    forward_out0: Option<Num>,
-    backward_out0: Option<Num>,
+    out0: Num,
     cache: &Cache,
     hashset_cache: &HashSetCache,
+    new_group: &mut Vec<Expr>,
 ) {
-    let mut new_group_forward = Vec::new();
-    let mut new_group_backward = Vec::new();
+    let (&op_idx, op) = unsafe { (OP_BINARY_INDEX_TABLE.get_unchecked(OP_IDX), BINARY_OPERATORS.get_unchecked(OP_IDX)) };
+
     let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
 
-    for e2 in &cache_level.exprs[start..start + len] {
-        for e1 in group {
+    for e1 in group_1 {
+        for e2 in group_2 {
             if e1.is_literal() && e2.is_literal() {
                 continue;
             }
@@ -437,67 +425,42 @@ fn find_binary_operators_grouped(
                 continue;
             }
 
-            if forward_out0.is_some() && op.can_apply(e1, e2) {
+            let (left, right) = (e1, e2);
+            
+            if op.can_apply(left, right) {
                 if check_match {
                     let mut matcher = Matcher::new();
-                    if e1
+                    if left
                         .output
                         .iter()
-                        .zip(e2.output.iter())
+                        .zip(right.output.iter())
                         .enumerate()
                         .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
                             Some(o) => matcher.match_one(i, o),
                             None => false,
                         })
-                        && matcher.match_final(Some(e1), e2, op_idx)
+                        && matcher.match_final(Some(left), right, op_idx)
                     {
-                        println!("{e1}{op_idx}{e2}");
+                        println!("{left}{op_idx}{right}");
                     }
-                } else if let Some(output) = op.vec_apply(e1.output.clone(), &e2.output) {
-                    new_group_forward.push(Expr::bin(
-                        e1.into(),
-                        e2.into(),
+                } else if let Some(output) = op.vec_apply(left.output.clone(), &right.output) {
+                    new_group.push(Expr::bin(
+                        left.into(),
+                        right.into(),
                         op_idx,
                         var_count,
                         output,
                     ));
-                }
-            }
 
-            if backward_out0.is_some() && op.can_apply(e2, e1) {
-                if check_match {
-                    let mut matcher = Matcher::new();
-                    if e2
-                        .output
-                        .iter()
-                        .zip(e1.output.iter())
-                        .enumerate()
-                        .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
-                            Some(o) => matcher.match_one(i, o),
-                            None => false,
-                        })
-                        && matcher.match_final(Some(e2), e1, op_idx)
-                    {
-                        println!("{e2}{op_idx}{e1}");
+                    if new_group.len() == MAX_GROUP_SIZE {
+                        save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
                     }
-                } else if let Some(output) = op.vec_apply(e2.output.clone(), &e1.output) {
-                    new_group_backward.push(Expr::bin(
-                        e2.into(),
-                        e1.into(),
-                        op_idx,
-                        var_count,
-                        output,
-                    ));
                 }
             }
         }
     }
-
-    if let Some(out0) = forward_out0 {
-        save_group(cn, new_group_forward, out0, n, cache, hashset_cache);
-    }
-    if let Some(out0) = backward_out0 {
-        save_group(cn, new_group_backward, out0, n, cache, hashset_cache);
+    if !new_group.is_empty() {
+        save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
     }
 }
 
@@ -510,44 +473,46 @@ fn find_binary_expressions_grouped<const BI_DIRECTIONAL: bool>(
     group: &[Expr],
     out0: Num,
 ) {
+    let mut new_group = Vec::new();
+
     seq!(op_len in 0..=5 {
-        if n > k + op_len {
-            let cache_level = &cache[n - k - op_len];
-            let mut start = 0_usize;
-            for &(e2_out0, len) in &cache_level.out0_groups {
-                let len = len as usize;
-                seq!(idx in 0..100 {
-                    if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
-                        if op.name.len() == op_len {
-                            let mut forward_out0 = None;
-                            if let Some(new_out0) = op.apply_(out0, e2_out0) {
-                                let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
-                                if !check_match || Matcher::new().match_one(0, new_out0) {
-                                    forward_out0 = Some(new_out0);
-                                }
-                            }
-
-                            let mut backward_out0 = None;
-                            if BI_DIRECTIONAL {
-                                if let Some(new_out0) = op.apply_(e2_out0, out0) {
-                                    let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
-                                    if !check_match || Matcher::new().match_one(0, new_out0) {
-                                        backward_out0 = Some(new_out0);
-                                    }
-                                }
-                            }
-
-                            if forward_out0.is_some() || backward_out0.is_some() {
-                                find_binary_operators_grouped(
-                                    cn, group, cache_level, start, len, op, op_idx, n,
-                                    forward_out0, backward_out0, cache, hashset_cache
+        if n <= k + op_len {
+            return;
+        }
+        let cache_level = &cache[n - k - op_len];
+        let mut start = 0usize;
+        for &(out0_other, len) in &cache_level.out0_groups {
+            let len = len as usize;
+            seq!(idx in 0..100 {
+                if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
+                    if op.name.len() == op_len {
+                        if let Some(new_out0) = op.apply_(out0, out0_other) {
+                            let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
+                            if !check_match || Matcher::new().match_one(0, new_out0) {
+                                find_binary_operators_grouped::<idx>(
+                                    cn, group, &cache_level.exprs[start..start + len], n,
+                                    new_out0, cache, hashset_cache,
+                                    &mut new_group
                                 );
                             }
                         }
+
+                        if BI_DIRECTIONAL {
+                            if let Some(new_out0) = op.apply_(out0_other, out0) {
+                                let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
+                                if !check_match || Matcher::new().match_one(0, new_out0) {
+                                    find_binary_operators_grouped::<idx>(
+                                        cn, &cache_level.exprs[start..start + len], group, n,
+                                        new_out0, cache, hashset_cache,
+                                        &mut new_group
+                                    );
+                                }
+                            }
+                        }
                     }
-                });
-                start += len;
-            }
+                }
+            });
+            start += len;
         }
     });
 }
@@ -582,7 +547,7 @@ fn find_unary_expressions_grouped(
                         }
                     }
                 }
-                save_group(cn, new_group, new_out0, n, cache, hashset_cache);
+                save_group(cn, &mut new_group, new_out0, n, cache, hashset_cache);
             }
         }
     });
@@ -606,7 +571,7 @@ fn find_parens_expressions_grouped(
             new_group.push(Expr::parens(er));
         }
     }
-    save_group(cn, new_group, out0, n, cache, hashset_cache);
+    save_group(cn, &mut new_group, out0, n, cache, hashset_cache);
 }
 
 // -----------------------------------------------------------------------------
@@ -687,9 +652,10 @@ fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSe
     if Matcher::GROUP_BY_FIRST_OUTPUT && !cn.is_empty() {
         let mut start = 0;
         let mut last_val = cn[0].output[0];
+
         for i in 1..cn.len() {
             let val = cn[i].output[0];
-            if val != last_val {
+            if val != last_val || i - start == MAX_GROUP_SIZE {
                 out0_groups.push((last_val, (i - start) as u32));
                 start = i;
                 last_val = val;
@@ -719,7 +685,7 @@ fn find_expressions_multithread(
         cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
             .into_par_iter()
             .flat_map(|k| {
-                par_iter_groups(&cache[k]).map(move |(group, out0)| {
+                iter_groups(&cache[k]).par_bridge().map(move |(group, out0)| {
                     let mut cn = Vec::new();
                     find_binary_expressions_grouped::<false>(
                         &mut cn,
@@ -734,42 +700,35 @@ fn find_expressions_multithread(
                 })
             })
             .chain(
-                std::iter::once_with(|| {
-                    let mut cn = Vec::new();
-                    if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
-                        for (group, out0) in iter_groups(&cache[n - 2]) {
-                            find_parens_expressions_grouped(
-                                &mut cn,
-                                cache,
-                                hashset_cache,
-                                n,
-                                group,
-                                out0,
-                            );
-                        }
-                    }
-                    cn
+                (if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
+                    &cache[n - 2..n - 1]
+                } else {
+                    &[]
                 })
-                .par_bridge(),
+                .par_iter()
+                .flat_map(|level| iter_groups(level).par_bridge())
+                .map(move |(group, out0)| {
+                    let mut cn = Vec::new();
+                    find_parens_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
+                    cn
+                }),
             )
             .chain(
-                std::iter::once_with(|| {
-                    let mut cn = Vec::new();
-                    if n >= 2 {
-                        for (group, out0) in iter_groups(&cache[n - 1]) {
-                            find_unary_expressions_grouped(
-                                &mut cn,
-                                cache,
-                                hashset_cache,
-                                n,
-                                group,
-                                out0,
-                            );
-                        }
-                    }
-                    cn
-                })
-                .par_bridge(),
+                (if n >= 2 { &cache[n - 1..n] } else { &[] })
+                    .par_iter()
+                    .flat_map(|level| iter_groups(level).par_bridge())
+                    .map(move |(group, out0)| {
+                        let mut cn = Vec::new();
+                        find_unary_expressions_grouped(
+                            &mut cn,
+                            cache,
+                            hashset_cache,
+                            n,
+                            group,
+                            out0,
+                        );
+                        cn
+                    }),
             )
             .flatten_iter()
             .collect();
