@@ -379,11 +379,9 @@ fn save_group(
             find_parens_expressions_grouped(cn, cache, hashset_cache, n + 2, group, out0);
         }
     } else {
-        // Appending drains `group` into `cn`
         cn.append(group);
     }
 
-    // Ensure the group is cleared out at the end for the caller
     group.clear();
 }
 
