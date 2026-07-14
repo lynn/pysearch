@@ -476,13 +476,12 @@ fn find_unary_expressions_grouped(
     group: &[Expr],
     out0: Num,
 ) {
+    let mut new_group = Vec::new();
     seq!(idx in 0..10 {
         if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
             let new_out0 = op.apply_(out0);
             let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
-
             if !check_match || Matcher::new().match_one(0, new_out0) {
-                let mut new_group = Vec::new();
                 for er in group {
                     if !can_use_required_vars(er.var_count, n) { continue; }
                     if op.can_apply(er) {

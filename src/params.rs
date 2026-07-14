@@ -102,4 +102,4 @@ pub const ENABLE_INVERSE_SEARCH: bool = false;
 
 /// Maximum number of expressions allowed in a group.
 /// Only used when `Matcher::GROUP_BY_FIRST_OUTPUT` is enabled.
-pub const MAX_GROUP_SIZE: usize = 128;
+pub const MAX_GROUP_SIZE: usize = 256;
