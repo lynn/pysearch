@@ -14,7 +14,6 @@ pub trait Match: Sized {
 
     fn new() -> Self;
 
-    #[inline(always)]
     fn match_one(&mut self, index: usize, output: Num) -> bool {
         output == GOAL[index]
     }

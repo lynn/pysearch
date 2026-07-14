@@ -14,7 +14,7 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-rayon = "1.11"
-hashbrown = "0.16"
-num-integer = "0.1.45"
+rayon = "1.12"
+hashbrown = "0.17"
+num-integer = "0.1.46"
 seq-macro = "0.3"
