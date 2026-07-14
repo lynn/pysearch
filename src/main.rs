@@ -352,7 +352,7 @@ fn save_group(
                 out0,
             );
         }
-        if n + 1 <= MAX_LENGTH {
+        if n + 1 <= MAX_LENGTH && group[0].prec() >= UnaryOp::PREC {
             find_unary_expressions_grouped(cn, cache, hashset_cache, n + 1, group, out0);
         }
         if !is_leaf_expr(OP_INDEX_PARENS, n + 2) {
