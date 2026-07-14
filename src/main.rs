@@ -653,13 +653,14 @@ fn find_expressions_multithread(
                     })
             })
             .chain(
-                (if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
-                    &cache[n - 2..n - 1]
-                } else {
-                    &[]
-                })
-                .par_iter()
-                .flat_map(|level| iter_groups(level).par_bridge())
+                iter_groups(
+                    &cache[if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
+                        n - 2
+                    } else {
+                        0
+                    }],
+                )
+                .par_bridge()
                 .map(move |(group, out0)| {
                     let mut cn = Vec::new();
                     find_parens_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
@@ -667,9 +668,8 @@ fn find_expressions_multithread(
                 }),
             )
             .chain(
-                (if n >= 2 { &cache[n - 1..n] } else { &[] })
-                    .par_iter()
-                    .flat_map(|level| iter_groups(level).par_bridge())
+                iter_groups(&cache[n - 1])
+                    .par_bridge()
                     .map(move |(group, out0)| {
                         let mut cn = Vec::new();
                         find_unary_expressions_grouped(
