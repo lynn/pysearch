@@ -40,14 +40,11 @@ impl Match for Matcher {
 pub const GOAL: &[Num] = &[1, 2, 3, 4, 5];
 
 pub const MAX_LENGTH: usize = 14;
-pub const MAX_CACHE_LENGTH: usize = 10;
+pub const MAX_CACHE_LENGTH: usize = 9;
 pub const MIN_MULTITHREAD_LENGTH: usize = MAX_CACHE_LENGTH + 1;
-pub const LITERALS: &[Num] = &[
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-];
+pub const LITERALS: &[Num] = &[];
 /// If not 0, include all numbers in 1..=MAX_LITERAL in addition to LITERALS.
-pub const MAX_LITERAL: Num = 0;
+pub const MAX_LITERAL: Num = 40;
 
 #[rustfmt::skip]
 pub const BINARY_OPERATORS: &[BinaryOp] = &[
@@ -102,3 +99,7 @@ pub const ERROR_VALUE: Option<Num> = None;
 /// expressions up to 2*MAX_CACHE_LENGTH+1 length.
 /// Does not support custom Matcher.
 pub const ENABLE_INVERSE_SEARCH: bool = false;
+
+/// Maximum number of expressions allowed in a group.
+/// Only used when `Matcher::GROUP_BY_FIRST_OUTPUT` is enabled.
+pub const MAX_GROUP_SIZE: usize = 128;

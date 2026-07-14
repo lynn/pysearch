@@ -15,26 +15,27 @@ use vec::Vector;
 use hashbrown::{hash_set::Entry, HashSet};
 use rayon::prelude::*;
 use seq_macro::seq;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-// cache[length][output] = highest-prec expression of that length yielding that output
-type CacheLevel = Vec<Expr>;
-type Cache = Vec<CacheLevel>;
+struct CacheLevel {
+    exprs: Vec<Expr>,
+    out0_groups: Vec<(Num, u32)>,
+}
 
+type Cache = Vec<CacheLevel>;
 type HashSetCache = HashSet<NonNullExpr>;
 
-/// Set to `true` the moment any matching expression is printed. Used by the
-/// `--stop-early` flag to terminate after the first length that
-/// yields a match. Written from parallel worker threads, so it's atomic.
-static FOUND_ANY: AtomicBool = AtomicBool::new(false);
+const HAS_UNLIMITED_VAR: bool = has_unlimited_var();
 
-/// Print a matching expression and record that a match was found.
-macro_rules! print_solution {
-    ($($arg:tt)*) => {{
-        FOUND_ANY.store(true, Ordering::Relaxed);
-        println!($($arg)*);
-    }};
+const fn has_unlimited_var() -> bool {
+    let mut i = 0;
+    while i < INPUTS.len() {
+        if INPUTS[i].max_uses == u8::MAX {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 fn positive_integer_length(mut k: Num) -> usize {
@@ -50,7 +51,7 @@ fn can_use_required_vars(var_count: VarCount, length: usize) -> bool {
     let missing_uses: u8 = var_count
         .iter()
         .zip(INPUTS.iter())
-        .map(|(&c, i)| i.min_uses - std::cmp::min(c, i.min_uses))
+        .map(|(&c, i)| i.min_uses.saturating_sub(c))
         .sum();
     length + missing_uses as usize * (1 + MIN_BINARY_OP_LEN) <= MAX_LENGTH
 }
@@ -60,18 +61,34 @@ fn is_leaf_expr(op_idx: OpIndex, length: usize) -> bool {
         || length == MAX_LENGTH - 1 && (UNARY_OPERATORS.len() == 0 || op_idx.prec() < UnaryOp::PREC)
 }
 
-const fn has_unlimited_var() -> bool {
-    let mut i = 0;
-    while i < INPUTS.len() {
-        if INPUTS[i].max_uses == u8::MAX {
-            return true;
-        }
-        i += 1;
-    }
-    false
+#[inline(always)]
+fn iter_groups<'a>(cache_level: &'a CacheLevel) -> impl Iterator<Item = (&'a [Expr], Num)> {
+    let mut start = 0;
+    cache_level.out0_groups.iter().map(move |&(out0, len)| {
+        let group = &cache_level.exprs[start..start + len as usize];
+        start += len as usize;
+        (group, out0)
+    })
 }
 
-fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
+fn add_var_counts(mut vc1: VarCount, vc2: VarCount, length: usize) -> Option<VarCount> {
+    for ((c1, c2), input) in vc1.iter_mut().zip(vc2).zip(INPUTS.iter()) {
+        *c1 += c2;
+        if *c1 > input.max_uses {
+            return None;
+        }
+    }
+    if !can_use_required_vars(vc1, length) {
+        return None;
+    }
+    Some(vc1)
+}
+
+// -----------------------------------------------------------------------------
+// SINGLE EXPR LOGIC (Used when !Matcher::GROUP_BY_FIRST_OUTPUT)
+// -----------------------------------------------------------------------------
+
+fn save(cn: &mut Vec<Expr>, expr: Expr, n: usize, cache: &Cache, hashset_cache: &HashSetCache) {
     let uses_required_vars = expr
         .var_count
         .iter()
@@ -79,7 +96,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         .all(|(&c, i)| c >= i.min_uses);
 
     if uses_required_vars && Matcher::match_all(&expr) {
-        print_solution!("{expr}");
+        println!("{expr}");
         return;
     }
 
@@ -87,7 +104,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    let cant_use_more_vars = !has_unlimited_var()
+    let cant_use_more_vars = !HAS_UNLIMITED_VAR
         && expr
             .var_count
             .iter()
@@ -109,14 +126,14 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
 
     if n > MAX_CACHE_LENGTH {
         for dfs_len in n + 1 + MIN_BINARY_OP_LEN..=MAX_LENGTH {
-            find_binary_expressions(level, cache, hashset_cache, dfs_len, n, &expr);
+            find_binary_expressions_single::<true>(cn, cache, hashset_cache, dfs_len, n, &expr);
         }
         if n + 1 <= MAX_LENGTH {
-            find_unary_operators(level, cache, hashset_cache, n + 1, &expr);
+            find_unary_operators_single(cn, cache, hashset_cache, n + 1, &expr);
         }
         if !is_leaf_expr(OP_INDEX_PARENS, n + 2) && expr.op_idx < OP_INDEX_PARENS {
             save(
-                level,
+                cn,
                 Expr::parens((&expr).into()),
                 n + 2,
                 cache,
@@ -126,12 +143,12 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
         return;
     }
 
-    level.push(expr);
+    cn.push(expr);
 }
 
 #[inline(always)]
-fn find_binary_operators(
-    cn: &mut CacheLevel,
+fn find_binary_operators_single(
+    cn: &mut Vec<Expr>,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
@@ -142,20 +159,9 @@ fn find_binary_operators(
     if er.is_literal() && el.is_literal() {
         return;
     }
-    let mut var_count = el.var_count;
-    for ((l, &r), i) in var_count
-        .iter_mut()
-        .zip(er.var_count.iter())
-        .zip(INPUTS.iter())
-    {
-        *l += r;
-        if *l > i.max_uses {
-            return;
-        }
-    }
-    if !can_use_required_vars(var_count, n) {
+    let Some(var_count) = add_var_counts(el.var_count, er.var_count, n) else {
         return;
-    }
+    };
     seq!(idx in 0..100 {
         if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
             if op.name.len() == op_len && op.can_apply(el, er) {
@@ -172,7 +178,7 @@ fn find_binary_operators(
                         })
                         && matcher.match_final(Some(el), er, op_idx)
                     {
-                        print_solution!("{el}{op_idx}{er}");
+                        println!("{el}{op_idx}{er}");
                     }
                 } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
                     save(
@@ -188,45 +194,30 @@ fn find_binary_operators(
     });
 }
 
-fn find_binary_expressions_left(
-    cn: &mut CacheLevel,
+fn find_binary_expressions_single<const BI_DIRECTIONAL: bool>(
+    cn: &mut Vec<Expr>,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
     k: usize,
-    er: &Expr,
+    e_fixed: &Expr,
 ) {
     seq!(op_len in 0..=5 {
         if n <= k + op_len {
             return;
-        };
-        for el in &cache[n - k - op_len] {
-            find_binary_operators(cn, cache, hashset_cache, n, el, er, op_len);
+        }
+        for e_other in &cache[n - k - op_len].exprs {
+            if BI_DIRECTIONAL {
+                find_binary_operators_single(cn, cache, hashset_cache, n, e_fixed, e_other, op_len);
+            }
+            find_binary_operators_single(cn, cache, hashset_cache, n, e_other, e_fixed, op_len);
         }
     });
 }
 
-fn find_binary_expressions(
-    cn: &mut CacheLevel,
-    cache: &Cache,
-    hashset_cache: &HashSetCache,
-    n: usize,
-    k: usize,
-    e1: &Expr,
-) {
-    seq!(op_len in 0..=5 {
-        if n <= k + op_len {
-            return;
-        };
-        for e2 in &cache[n - k - op_len] {
-            find_binary_operators(cn, cache, hashset_cache, n, e1, e2, op_len);
-            find_binary_operators(cn, cache, hashset_cache, n, e2, e1, op_len);
-        }
-    });
-}
-
-fn find_unary_operators(
-    cn: &mut CacheLevel,
+#[inline(always)]
+fn find_unary_operators_single(
+    cn: &mut Vec<Expr>,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
@@ -247,7 +238,7 @@ fn find_unary_operators(
                         .all(|(i, &or)| matcher.match_one(i, op.apply_(or)))
                         && matcher.match_final(None, er, op_idx)
                     {
-                        print_solution!("{op_idx}{er}");
+                        println!("{op_idx}{er}");
                     }
                 } else {
                     save(
@@ -263,8 +254,8 @@ fn find_unary_operators(
     });
 }
 
-fn find_unary_expressions(
-    cn: &mut CacheLevel,
+fn find_unary_expressions_single(
+    cn: &mut Vec<Expr>,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
@@ -272,13 +263,13 @@ fn find_unary_expressions(
     if n < 2 {
         return;
     }
-    for r in &cache[n - 1] {
-        find_unary_operators(cn, cache, hashset_cache, n, r);
+    for r in &cache[n - 1].exprs {
+        find_unary_operators_single(cn, cache, hashset_cache, n, r);
     }
 }
 
-fn find_parens_expressions(
-    cn: &mut CacheLevel,
+fn find_parens_expressions_single(
+    cn: &mut Vec<Expr>,
     cache: &Cache,
     hashset_cache: &HashSetCache,
     n: usize,
@@ -286,7 +277,7 @@ fn find_parens_expressions(
     if n < 4 || is_leaf_expr(OP_INDEX_PARENS, n) {
         return;
     }
-    for er in &cache[n - 2] {
+    for er in &cache[n - 2].exprs {
         if !can_use_required_vars(er.var_count, n) {
             continue;
         }
@@ -296,7 +287,249 @@ fn find_parens_expressions(
     }
 }
 
-fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
+// -----------------------------------------------------------------------------
+// GROUPED EXPR LOGIC (Used when Matcher::GROUP_BY_FIRST_OUTPUT)
+// -----------------------------------------------------------------------------
+
+fn save_group(
+    cn: &mut Vec<Expr>,
+    group: &mut Vec<Expr>,
+    out0: Num,
+    n: usize,
+    cache: &Cache,
+    hashset_cache: &HashSetCache,
+) {
+    if group.is_empty() {
+        return;
+    }
+    for expr in group.iter() {
+        let uses_required_vars = expr
+            .var_count
+            .iter()
+            .zip(INPUTS.iter())
+            .all(|(&c, i)| c >= i.min_uses);
+
+        if uses_required_vars && Matcher::match_all(expr) {
+            println!("{expr}");
+        }
+    }
+
+    if !Matcher::MATCH_1BY1 && is_leaf_expr(group[0].op_idx, n) {
+        group.clear();
+        return;
+    }
+
+    if n <= MAX_LENGTH - 3 {
+        group.retain(|expr| {
+            if n <= MAX_CACHE_LENGTH && !HAS_UNLIMITED_VAR {
+                let cant_use_more_vars = expr
+                    .var_count
+                    .iter()
+                    .zip(INPUTS.iter())
+                    .all(|(&c, inp)| c == inp.max_uses);
+                if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
+                    return false;
+                }
+            }
+            hashset_cache
+                .get::<NonNullExpr>(&expr.into())
+                .is_none_or(|e| e.as_ref().prec() < expr.prec())
+        });
+        if group.is_empty() {
+            return;
+        }
+    }
+
+    if n > MAX_CACHE_LENGTH {
+        for dfs_len in n + 1 + MIN_BINARY_OP_LEN..=MAX_LENGTH {
+            find_binary_expressions_grouped::<true>(
+                cn,
+                cache,
+                hashset_cache,
+                dfs_len,
+                n,
+                group,
+                out0,
+            );
+        }
+        if n + 1 <= MAX_LENGTH {
+            find_unary_expressions_grouped(cn, cache, hashset_cache, n + 1, group, out0);
+        }
+        if !is_leaf_expr(OP_INDEX_PARENS, n + 2) {
+            find_parens_expressions_grouped(cn, cache, hashset_cache, n + 2, group, out0);
+        }
+        group.clear();
+    } else {
+        cn.append(group);
+    }
+}
+
+#[inline(always)]
+fn find_binary_operators_grouped(
+    cn: &mut Vec<Expr>,
+    group_left: &[Expr],
+    group_right: &[Expr],
+    n: usize,
+    out0: Num,
+    cache: &Cache,
+    hashset_cache: &HashSetCache,
+    new_group: &mut Vec<Expr>,
+    op_idx: OpIndex,
+    op: &BinaryOp,
+    check_match: bool,
+) {
+    for el in group_left {
+        for er in group_right {
+            if el.is_literal() && er.is_literal() {
+                continue;
+            }
+            let Some(var_count) = add_var_counts(el.var_count, er.var_count, n) else {
+                continue;
+            };
+            if op.can_apply(el, er) {
+                if check_match {
+                    let mut matcher = Matcher::new();
+                    if el
+                        .output
+                        .iter()
+                        .zip(er.output.iter())
+                        .enumerate()
+                        .all(|(i, (&ol, &or))| match op.apply_(ol, or) {
+                            Some(o) => matcher.match_one(i, o),
+                            None => false,
+                        })
+                        && matcher.match_final(Some(el), er, op_idx)
+                    {
+                        println!("{el}{op_idx}{er}");
+                    }
+                } else if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+                    new_group.push(Expr::bin(el.into(), er.into(), op_idx, var_count, output));
+
+                    if new_group.len() == MAX_GROUP_SIZE {
+                        save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
+                    }
+                }
+            }
+        }
+    }
+    save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
+}
+
+fn find_binary_expressions_grouped<const BI_DIRECTIONAL: bool>(
+    cn: &mut Vec<Expr>,
+    cache: &Cache,
+    hashset_cache: &HashSetCache,
+    n: usize,
+    k: usize,
+    group: &[Expr],
+    out0: Num,
+) {
+    let mut new_group = Vec::new();
+
+    seq!(op_len in 0..=5 {
+        if n <= k + op_len {
+            return;
+        }
+        let cache_level = &cache[n - k - op_len];
+        let mut start = 0usize;
+        for &(out0_other, len) in &cache_level.out0_groups {
+            let len = len as usize;
+            seq!(idx in 0..100 {
+                if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
+                    if op.name.len() == op_len {
+                        if let Some(new_out0) = op.apply_(out0, out0_other) {
+                            let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
+                            if !check_match || Matcher::new().match_one(0, new_out0) {
+                                find_binary_operators_grouped(
+                                    cn, group, &cache_level.exprs[start..start + len], n,
+                                    new_out0, cache, hashset_cache,
+                                    &mut new_group, op_idx, op, check_match,
+                                );
+                            }
+                        }
+
+                        if BI_DIRECTIONAL {
+                            if let Some(new_out0) = op.apply_(out0_other, out0) {
+                                let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
+                                if !check_match || Matcher::new().match_one(0, new_out0) {
+                                    find_binary_operators_grouped(
+                                        cn, &cache_level.exprs[start..start + len], group, n,
+                                        new_out0, cache, hashset_cache,
+                                        &mut new_group, op_idx, op, check_match,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            start += len;
+        }
+    });
+}
+
+fn find_unary_expressions_grouped(
+    cn: &mut Vec<Expr>,
+    cache: &Cache,
+    hashset_cache: &HashSetCache,
+    n: usize,
+    group: &[Expr],
+    out0: Num,
+) {
+    seq!(idx in 0..10 {
+        if let (Some(&op_idx), Some(op)) = (OP_UNARY_INDEX_TABLE.get(idx), UNARY_OPERATORS.get(idx)) {
+            let new_out0 = op.apply_(out0);
+            let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
+
+            if !check_match || Matcher::new().match_one(0, new_out0) {
+                let mut new_group = Vec::new();
+                for er in group {
+                    if !can_use_required_vars(er.var_count, n) { continue; }
+                    if op.can_apply(er) {
+                        if check_match {
+                            let mut matcher = Matcher::new();
+                            if er.output.iter().enumerate().all(|(i, &or)| matcher.match_one(i, op.apply_(or)))
+                                && matcher.match_final(None, er, op_idx)
+                            {
+                                println!("{op_idx}{er}");
+                            }
+                        } else {
+                            new_group.push(Expr::unary(er, op_idx, op.vec_apply(er.output.clone())));
+                        }
+                    }
+                }
+                save_group(cn, &mut new_group, new_out0, n, cache, hashset_cache);
+            }
+        }
+    });
+}
+
+fn find_parens_expressions_grouped(
+    cn: &mut Vec<Expr>,
+    cache: &Cache,
+    hashset_cache: &HashSetCache,
+    n: usize,
+    group: &[Expr],
+    out0: Num,
+) {
+    if n < 4 || is_leaf_expr(OP_INDEX_PARENS, n) {
+        return;
+    }
+
+    let mut new_group = Vec::with_capacity(group.len());
+    for er in group {
+        if can_use_required_vars(er.var_count, n) && er.op_idx < OP_INDEX_PARENS {
+            new_group.push(Expr::parens(er));
+        }
+    }
+    save_group(cn, &mut new_group, out0, n, cache, hashset_cache);
+}
+
+// -----------------------------------------------------------------------------
+// MAIN SEARCH LOGIC
+// -----------------------------------------------------------------------------
+
+fn find_variables_and_literals(cn: &mut Vec<Expr>, n: usize) {
     for (i, input) in INPUTS.iter().enumerate() {
         if n == input.name.len() {
             cn.push(Expr::variable(i, Vector::from_slice(input.vec)));
@@ -316,7 +549,7 @@ fn find_variables_and_literals(cn: &mut CacheLevel, n: usize) {
     }
 }
 
-fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashSetCache) {
+fn add_to_cache(mut cn: Vec<Expr>, cache: &mut Cache, hashset_cache: &mut HashSetCache) {
     let mut idx = 0;
     let start_ptr = cn.as_ptr();
     while idx < cn.len() {
@@ -346,9 +579,47 @@ fn add_to_cache(mut cn: CacheLevel, cache: &mut Cache, hashset_cache: &mut HashS
             }
         }
     }
+
+    if Matcher::GROUP_BY_FIRST_OUTPUT {
+        for expr in &cn {
+            let expr_key: NonNullExpr = expr.into();
+            let expr_ptr = expr_key.as_ptr();
+            if let Entry::Occupied(e) = hashset_cache.entry(expr_key) {
+                if e.get().as_ptr() == expr_ptr {
+                    e.remove();
+                }
+            }
+        }
+        cn.sort_by_key(|e| e.output[0]);
+        for expr in &cn {
+            hashset_cache.insert(expr.into());
+        }
+    }
+
     cn.shrink_to_fit();
-    cache.push(cn);
     hashset_cache.shrink_to_fit();
+
+    let mut out0_groups = Vec::new();
+    if Matcher::GROUP_BY_FIRST_OUTPUT && !cn.is_empty() {
+        let mut start = 0;
+        let mut last_val = cn[0].output[0];
+
+        for i in 1..cn.len() {
+            let val = cn[i].output[0];
+            if val != last_val || i - start == MAX_GROUP_SIZE {
+                out0_groups.push((last_val, (i - start) as u32));
+                start = i;
+                last_val = val;
+            }
+        }
+        out0_groups.push((last_val, (cn.len() - start) as u32));
+    }
+    out0_groups.shrink_to_fit();
+
+    cache.push(CacheLevel {
+        exprs: cn,
+        out0_groups,
+    });
 }
 
 fn find_expressions_multithread(
@@ -356,80 +627,162 @@ fn find_expressions_multithread(
     mut_hashset_cache: &mut HashSetCache,
     n: usize,
 ) {
-    let cache = &mut_cache;
-    let hashset_cache = &mut_hashset_cache;
+    let cache = &*mut_cache;
+    let hashset_cache = &*mut_hashset_cache;
 
-    let mut cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
-        .into_par_iter()
-        .flat_map(|k| {
-            cache[k].par_iter().map(move |r| {
-                let mut cn = CacheLevel::new();
-                find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
-                cn
+    let mut cn: Vec<Expr>;
+
+    if Matcher::GROUP_BY_FIRST_OUTPUT {
+        cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
+            .into_par_iter()
+            .flat_map(|k| {
+                iter_groups(&cache[k])
+                    .par_bridge()
+                    .map(move |(group, out0)| {
+                        let mut cn = Vec::new();
+                        find_binary_expressions_grouped::<false>(
+                            &mut cn,
+                            cache,
+                            hashset_cache,
+                            n,
+                            k,
+                            group,
+                            out0,
+                        );
+                        cn
+                    })
             })
-        })
-        .chain(
-            std::iter::once_with(|| {
-                let mut cn = CacheLevel::new();
-                find_parens_expressions(&mut cn, cache, hashset_cache, n);
-                cn
+            .chain(
+                iter_groups(
+                    &cache[if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
+                        n - 2
+                    } else {
+                        0
+                    }],
+                )
+                .par_bridge()
+                .map(move |(group, out0)| {
+                    let mut cn = Vec::new();
+                    find_parens_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
+                    cn
+                }),
+            )
+            .chain(
+                iter_groups(&cache[n - 1])
+                    .par_bridge()
+                    .map(move |(group, out0)| {
+                        let mut cn = Vec::new();
+                        find_unary_expressions_grouped(
+                            &mut cn,
+                            cache,
+                            hashset_cache,
+                            n,
+                            group,
+                            out0,
+                        );
+                        cn
+                    }),
+            )
+            .flatten_iter()
+            .collect();
+    } else {
+        cn = (1..n.saturating_sub(MIN_BINARY_OP_LEN))
+            .into_par_iter()
+            .flat_map(|k| {
+                cache[k].exprs.par_iter().map(move |r| {
+                    let mut cn = Vec::new();
+                    find_binary_expressions_single::<false>(&mut cn, cache, hashset_cache, n, k, r);
+                    cn
+                })
             })
-            .par_bridge(),
-        )
-        .chain(
-            std::iter::once_with(|| {
-                let mut cn = CacheLevel::new();
-                find_unary_expressions(&mut cn, cache, hashset_cache, n);
-                cn
-            })
-            .par_bridge(),
-        )
-        .flatten_iter()
-        .collect();
+            .chain(
+                std::iter::once_with(|| {
+                    let mut cn = Vec::new();
+                    find_parens_expressions_single(&mut cn, cache, hashset_cache, n);
+                    cn
+                })
+                .par_bridge(),
+            )
+            .chain(
+                std::iter::once_with(|| {
+                    let mut cn = Vec::new();
+                    find_unary_expressions_single(&mut cn, cache, hashset_cache, n);
+                    cn
+                })
+                .par_bridge(),
+            )
+            .flatten_iter()
+            .collect();
+    }
 
     find_variables_and_literals(&mut cn, n);
-
     add_to_cache(cn, mut_cache, mut_hashset_cache);
 }
 
 fn find_expressions(cache: &mut Cache, hashset_cache: &mut HashSetCache, n: usize) {
-    let mut cn = CacheLevel::new();
+    let mut cn = Vec::new();
+
     find_variables_and_literals(&mut cn, n);
-    find_parens_expressions(&mut cn, cache, hashset_cache, n);
-    find_unary_expressions(&mut cn, cache, hashset_cache, n);
-    for k in 1..n.saturating_sub(MIN_BINARY_OP_LEN) {
-        for r in &cache[k] {
-            find_binary_expressions_left(&mut cn, cache, hashset_cache, n, k, r);
+
+    if Matcher::GROUP_BY_FIRST_OUTPUT {
+        for k in 1..n.saturating_sub(MIN_BINARY_OP_LEN) {
+            for (group, out0) in iter_groups(&cache[k]) {
+                find_binary_expressions_grouped::<false>(
+                    &mut cn,
+                    cache,
+                    hashset_cache,
+                    n,
+                    k,
+                    group,
+                    out0,
+                );
+            }
+        }
+
+        if n >= 4 && !is_leaf_expr(OP_INDEX_PARENS, n) {
+            for (group, out0) in iter_groups(&cache[n - 2]) {
+                find_parens_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
+            }
+        }
+
+        if n >= 2 {
+            for (group, out0) in iter_groups(&cache[n - 1]) {
+                find_unary_expressions_grouped(&mut cn, cache, hashset_cache, n, group, out0);
+            }
+        }
+    } else {
+        find_parens_expressions_single(&mut cn, cache, hashset_cache, n);
+        find_unary_expressions_single(&mut cn, cache, hashset_cache, n);
+        for k in 1..n.saturating_sub(MIN_BINARY_OP_LEN) {
+            for r in &cache[k].exprs {
+                find_binary_expressions_single::<false>(&mut cn, cache, hashset_cache, n, k, r);
+            }
         }
     }
+
     add_to_cache(cn, cache, hashset_cache);
 }
 
 fn find_expressions_inverse(cache: &Cache, hashset_cache: &HashSetCache) {
-    cache
-        .par_iter()
-        .for_each(|level| {
-            level.par_iter().for_each(|er| {
-                seq!(idx in 0..100 {
-                    if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
-                        if let Some(output) = op.vec_apply_inverse(er.output.clone(), &Vector::from_slice(GOAL) ) {
-                            if let Some(el) = hashset_cache.get(&output) {
-                                let el = el.as_ref();
-                                if op.can_apply(el, er)
-                                    && el
-                                        .var_count
-                                        .iter()
-                                        .zip(er.var_count.iter())
-                                        .zip(INPUTS.iter())
-                                        .all(|((&l, &r), i)| l + r >= i.min_uses && l + r <= i.max_uses) {
-                                    print_solution!("{el}{op_idx}{er}");
-                                }
+    let goal_vec = Vector::from_slice(GOAL);
+    cache.par_iter().for_each(|level| {
+        level.exprs.par_iter().for_each(|er| {
+            seq!(idx in 0..100 {
+                if let (Some(&op_idx), Some(op)) = (OP_BINARY_INDEX_TABLE.get(idx), BINARY_OPERATORS.get(idx)) {
+                    if let Some(output) = op.vec_apply_inverse(er.output.clone(), &goal_vec) {
+                        if let Some(el) = hashset_cache.get(&output) {
+                            let el = el.as_ref();
+                            if op.can_apply(el, er)
+                                && el.var_count.iter().zip(er.var_count.iter()).zip(INPUTS.iter())
+                                    .all(|((&l, &r), i)| l + r >= i.min_uses && l + r <= i.max_uses) {
+                                println!("{el}{op_idx}{er}");
                             }
                         }
                     }
-                });
+                }
             });
         });
+    });
 }
 
 fn validate_input() {
@@ -439,7 +792,6 @@ fn validate_input() {
             GOAL.len(),
             "INPUTS and GOAL must have equal length"
         );
-
         assert_ne!(i.max_uses, 0, "INPUTS maximum uses must be non-zero");
     }
 
@@ -459,48 +811,41 @@ fn validate_input() {
     }
 }
 
-fn parse_args() -> bool {
-    let mut stop_early = false;
-    for arg in std::env::args().skip(1) {
-        match arg.as_str() {
-            "-s" | "--stop-early" => stop_early = true,
-            other => {
-                eprintln!("Unknown argument: {other}");
-                eprintln!("Usage: pysearch [-s|--stop-early]");
-                std::process::exit(2);
-            }
-        }
-    }
-    stop_early
-}
-
 fn main() {
-    let stop_early = parse_args();
-
     validate_input();
 
-    let mut cache: Cache = vec![CacheLevel::new()];
+    let mut cache: Cache = vec![CacheLevel {
+        exprs: Vec::new(),
+        out0_groups: Vec::new(),
+    }];
     let mut hashset_cache: HashSetCache = HashSetCache::new();
     let mut total_count = 0;
+
     println!("sizeof(Expr) = {}", std::mem::size_of::<Expr>());
     let start = Instant::now();
+
     for n in 1..=MAX_LENGTH {
         match n {
             0..=MAX_CACHE_LENGTH | MAX_LENGTH => println!("Finding length {n}..."),
             _ => println!("Finding length {n}-{MAX_LENGTH}..."),
         }
+
         let layer_start = Instant::now();
+
         if n >= MIN_MULTITHREAD_LENGTH {
             find_expressions_multithread(&mut cache, &mut hashset_cache, n);
         } else {
             find_expressions(&mut cache, &mut hashset_cache, n);
         }
-        let count = cache[n].len();
+
+        let count = cache[n].exprs.len();
         total_count += count;
         let time = layer_start.elapsed();
         println!("Cached {count} expressions in {time:?}");
+
         let total_time = start.elapsed();
         println!("Total: {total_count} expressions in {total_time:?}\n");
+
         if ENABLE_INVERSE_SEARCH && n == MAX_CACHE_LENGTH {
             println!(
                 "Finding length {n}-{} with invertible operators...",
@@ -510,10 +855,6 @@ fn main() {
             find_expressions_inverse(&cache, &hashset_cache);
             let time = inverse_start.elapsed();
             println!("Explored expressions with invertible operators in {time:?}\n");
-        }
-        if stop_early && FOUND_ANY.load(Ordering::Relaxed) {
-            println!("Found expression(s) at length {n}; stopping.");
-            break;
         }
     }
     println!();
