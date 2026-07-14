@@ -302,7 +302,6 @@ fn save_group(
     if group.is_empty() {
         return;
     }
-
     for expr in group.iter() {
         let uses_required_vars = expr
             .var_count
@@ -320,44 +319,25 @@ fn save_group(
         return;
     }
 
-    let mut write_idx = 0;
-
-    for i in 0..group.len() {
-        let remove = {
-            let expr = &group[i];
-            let cant_use_more_vars = !HAS_UNLIMITED_VAR
-                && expr
+    if n <= MAX_LENGTH - 3 {
+        group.retain(|expr| {
+            if n <= MAX_CACHE_LENGTH && !HAS_UNLIMITED_VAR {
+                let cant_use_more_vars = expr
                     .var_count
                     .iter()
                     .zip(INPUTS.iter())
                     .all(|(&c, inp)| c == inp.max_uses);
-
-            if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
-                true
-            } else if n <= MAX_LENGTH - 3 {
-                let expr_ptr: NonNullExpr = expr.into();
-                if let Some(e) = hashset_cache.get(&expr_ptr) {
-                    e.as_ref().prec() >= expr.prec()
-                } else {
-                    false
+                if cant_use_more_vars && Matcher::output_has_conflict(&expr.output) {
+                    return false;
                 }
-            } else {
-                false
             }
-        };
-
-        if !remove {
-            if write_idx != i {
-                group.swap(write_idx, i);
-            }
-            write_idx += 1;
+            hashset_cache
+                .get::<NonNullExpr>(&expr.into())
+                .is_none_or(|e| e.as_ref().prec() < expr.prec())
+        });
+        if group.is_empty() {
+            return;
         }
-    }
-
-    group.truncate(write_idx);
-
-    if group.is_empty() {
-        return;
     }
 
     if n > MAX_CACHE_LENGTH {
@@ -378,15 +358,14 @@ fn save_group(
         if !is_leaf_expr(OP_INDEX_PARENS, n + 2) {
             find_parens_expressions_grouped(cn, cache, hashset_cache, n + 2, group, out0);
         }
+        group.clear();
     } else {
         cn.append(group);
     }
-
-    group.clear();
 }
 
 #[inline(always)]
-fn find_binary_operators_grouped<const OP_IDX: usize>(
+fn find_binary_operators_grouped(
     cn: &mut Vec<Expr>,
     group_left: &[Expr],
     group_right: &[Expr],
@@ -395,21 +374,17 @@ fn find_binary_operators_grouped<const OP_IDX: usize>(
     cache: &Cache,
     hashset_cache: &HashSetCache,
     new_group: &mut Vec<Expr>,
+    op_idx: OpIndex,
+    op: &BinaryOp,
+    check_match: bool,
 ) {
-    let (&op_idx, op) = (
-        OP_BINARY_INDEX_TABLE.get(OP_IDX).unwrap(),
-        BINARY_OPERATORS.get(OP_IDX).unwrap(),
-    );
-
-    let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
-
     for el in group_left {
         for er in group_right {
             if el.is_literal() && er.is_literal() {
                 continue;
             }
             let Some(var_count) = add_var_counts(el.var_count, er.var_count, n) else {
-                return;
+                continue;
             };
             if op.can_apply(el, er) {
                 if check_match {
@@ -437,9 +412,7 @@ fn find_binary_operators_grouped<const OP_IDX: usize>(
             }
         }
     }
-    if !new_group.is_empty() {
-        save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
-    }
+    save_group(cn, &mut *new_group, out0, n, cache, hashset_cache);
 }
 
 fn find_binary_expressions_grouped<const BI_DIRECTIONAL: bool>(
@@ -467,10 +440,10 @@ fn find_binary_expressions_grouped<const BI_DIRECTIONAL: bool>(
                         if let Some(new_out0) = op.apply_(out0, out0_other) {
                             let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
                             if !check_match || Matcher::new().match_one(0, new_out0) {
-                                find_binary_operators_grouped::<idx>(
+                                find_binary_operators_grouped(
                                     cn, group, &cache_level.exprs[start..start + len], n,
                                     new_out0, cache, hashset_cache,
-                                    &mut new_group
+                                    &mut new_group, op_idx, op, check_match,
                                 );
                             }
                         }
@@ -479,10 +452,10 @@ fn find_binary_expressions_grouped<const BI_DIRECTIONAL: bool>(
                             if let Some(new_out0) = op.apply_(out0_other, out0) {
                                 let check_match = Matcher::MATCH_1BY1 && is_leaf_expr(op_idx, n);
                                 if !check_match || Matcher::new().match_one(0, new_out0) {
-                                    find_binary_operators_grouped::<idx>(
+                                    find_binary_operators_grouped(
                                         cn, &cache_level.exprs[start..start + len], group, n,
                                         new_out0, cache, hashset_cache,
-                                        &mut new_group
+                                        &mut new_group, op_idx, op, check_match,
                                     );
                                 }
                             }
